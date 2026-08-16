@@ -1318,90 +1318,129 @@ def get_available_order_for_driver(driver_id):
     }
 
 
-def accept_delivery_order(order_id, driver_id,redis_data):
-    total=time.perf_counter()
-    with client.start_session() as session:
-        with session.start_transaction():
-            amount=redis_data["amount"]
-            start=time.perf_counter()
-            result = seller_orders.find_one_and_update(
-                {
-                    "_id": ObjectId(order_id),
-                    "status": "placed"
-                },
-                {
-                    "$set": {
-                        "delivery_status": "accepted",
-                        "driver_id": driver_id,
-                        "step": 0,
-                        "accepted_at": datetime.utcnow()
-                    }
-                },
-                return_document=ReturnDocument.AFTER,
-                session=session
-            )
-            seller_orders_insert = time.perf_counter() - start
-            if not result:
-                return {
-                    "success": False,
-                    "message": "Order already taken"
-                }
-            start=time.perf_counter()
-            driver_orders.insert_one(
-                    {
-                        "driver_id": driver_id,
-                        "order_id": order_id,
-                        "amount": amount,
-                        "seller_id": str(result["restaurant_id"]),
-                        "restaurant_name": result.get("restaurant_name"),
-                        "token_no": result.get("token_no"),
-                        "customer_name": redis_data.get("customer_name"),
-                        "warehouse_lat": redis_data.get("warehouse_lat"),
-                        "warehouse_lng": redis_data.get("warehouse_lng"),
-                        "customer_lat": redis_data.get("customer_lat"),
-                        "customer_lng": redis_data.get("customer_lng"),
-                        "customer_km": redis_data.get("customer_km"),
-                        "warehouse_km": redis_data.get("warehouse_km"),
-                        "delivery_otp": generate_delivery_otp(),
-                        "step": 0,
-                        "status": "pending",
-                        "accepted_at": datetime.utcnow()
-                    },
-                    session=session
-                )
-            driver_orders_insert = time.perf_counter() - start
-            start=time.perf_counter()
-            drivers.update_one(
-                {"_id": ObjectId(driver_id)},
-                {"$inc": {"orders_accepted": 1}},
-                session=session
-            )
-            drivers_insert = time.perf_counter() - start
+# def accept_delivery_order(order_id, driver_id,redis_data):
+#     total=time.perf_counter()
+#     with client.start_session() as session:
+#         with session.start_transaction():
+#             amount=redis_data["amount"]
+#             start=time.perf_counter()
+#             result = seller_orders.find_one_and_update(
+#                 {
+#                     "_id": ObjectId(order_id),
+#                     "status": "placed"
+#                 },
+#                 {
+#                     "$set": {
+#                         "delivery_status": "accepted",
+#                         "driver_id": driver_id,
+#                         "step": 0,
+#                         "accepted_at": datetime.utcnow()
+#                     }
+#                 },
+#                 # return_document=ReturnDocument.AFTER,
+#                 session=session
+#             )
+#             seller_orders_insert = time.perf_counter() - start
+#             # if not result:
+#             #     return {
+#             #         "success": False,
+#             #         "message": "Order already taken"
+#             #     }
+#             start=time.perf_counter()
+#             # driver_orders.insert_one(
+#             #         {
+#             #             "driver_id": driver_id,
+#             #             "order_id": order_id,
+#             #             "amount": amount,
+#             #             "seller_id": str(result["restaurant_id"]),
+#             #             "restaurant_name": result.get("restaurant_name"),
+#             #             "token_no": result.get("token_no"),
+#             #             "customer_name": redis_data.get("customer_name"),
+#             #             "warehouse_lat": redis_data.get("warehouse_lat"),
+#             #             "warehouse_lng": redis_data.get("warehouse_lng"),
+#             #             "customer_lat": redis_data.get("customer_lat"),
+#             #             "customer_lng": redis_data.get("customer_lng"),
+#             #             "customer_km": redis_data.get("customer_km"),
+#             #             "warehouse_km": redis_data.get("warehouse_km"),
+#             #             "delivery_otp": generate_delivery_otp(),
+#             #             "step": 0,
+#             #             "status": "pending",
+#             #             "accepted_at": datetime.utcnow()
+#             #         },
+#             #         session=session
+#             #     )
+#             driver_orders_insert = time.perf_counter() - start
+#             start=time.perf_counter()
+#             drivers.update_one(
+#                 {"_id": ObjectId(driver_id)},
+#                 {"$inc": {"orders_accepted": 1}},
+#                 session=session
+#             )
+#             drivers_insert = time.perf_counter() - start
 
-    items_seller={}
-    start=time.perf_counter()
-    for id,values in result["items"].items():
-        ##print(id,values)
-        items_seller[values["name"]]=values["qty"]
-    last_loop = time.perf_counter() - start
-    ##print(items_seller)
-    # #print("accept_order_mongo",time.perf_counter()-total)
-    total_time=time.perf_counter()-total
-    #print(
-    #     f"MONGO "
-    #     f"read={seller_orders_insert:.6f}s "
-    #     f"read={driver_orders_insert:.6f}s "
-    #     f"update={drivers_insert:.6f}s "
-    #     f"commit={last_loop:.6f}s "
-    #     f"total={total_time:.6f}"
-    # )
+#     items_seller={}
+#     start=time.perf_counter()
+#     for id,values in result["items"].items():
+#         ##print(id,values)
+#         items_seller[values["name"]]=values["qty"]
+#     last_loop = time.perf_counter() - start
+#     ##print(items_seller)
+#     # #print("accept_order_mongo",time.perf_counter()-total)
+#     total_time=time.perf_counter()-total
+#     #print(
+#     #     f"MONGO "
+#     #     f"read={seller_orders_insert:.6f}s "
+#     #     f"read={driver_orders_insert:.6f}s "
+#     #     f"update={drivers_insert:.6f}s "
+#     #     f"commit={last_loop:.6f}s "
+#     #     f"total={total_time:.6f}"
+#     # )
+#     return {
+#         "success": True,
+#         "order": {
+#             "order_id": str(result["_id"]),
+#             "token_no":result["token_no"],
+#             "amount":amount,
+#             "items":items_seller
+#         }
+#     }
+
+
+def accept_delivery_order(order_id, driver_id, redis_data):
+    # Single atomic Mongo query - no explicit multi-doc transaction needed
+    result = seller_orders.find_one_and_update(
+        {
+            "_id": ObjectId(order_id),
+            "status": "placed"
+        },
+        {
+            "$set": {
+                "delivery_status": "accepted",
+                "driver_id": driver_id,
+                "step": 0,
+                "accepted_at": datetime.utcnow()
+            }
+        }
+    )
+
+    if not result:
+        return {"success": False, "message": "Order already processed"}
+
+    # Fire-and-forget stats update without blocking transaction
+    drivers.update_one(
+        {"_id": ObjectId(driver_id)},
+        {"$inc": {"orders_accepted": 1}}
+    )
+
+    items_seller = {val["name"]: val["qty"] for val in result.get("items", {}).values()}
+
     return {
         "success": True,
         "order": {
             "order_id": str(result["_id"]),
-            "token_no":result["token_no"],
-            "amount":amount,
-            "items":items_seller
+            "token_no": result.get("token_no"),
+            "amount": redis_data.get("amount"),
+            "items": items_seller
         }
     }
 def get_active_driver_order(driver_id):

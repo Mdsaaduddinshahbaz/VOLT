@@ -270,39 +270,82 @@ def set_driver_offline(driver_id):
     pipe.execute()
     return {"success": True}
 
+# def accept_order_redis(order_id, driver_id):
+#     total=time.perf_counter()
+#     order_id = str(order_id)
+#     driver_id = str(driver_id)
+#     t = time.perf_counter()
+#     won = r.set(f"order:{order_id}:lock", driver_id, nx=True, ex=60)
+
+#     set_time = time.perf_counter() - t
+#     if not won:
+#         return False, None
+
+#     key = f"order_request:{order_id}:{driver_id}"
+#     t = time.perf_counter()
+#     raw = r.get(key)
+#     get_time = time.perf_counter() - t
+#     if not raw:
+#         # request expired, or was never sent to this driver — release the lock
+#         # instead of leaving the order stuck for 60s with no one able to claim it
+#         r.delete(f"order:{order_id}:lock")
+#         return False, None
+
+#     request = json.loads(raw)
+#     t = time.perf_counter()
+#     mark_driver_busy(driver_id)
+#     busy_time = time.perf_counter() - t
+#     total_time=time.perf_counter()-total
+#     print(
+#         f"REDIS "
+#         f"SET={set_time:.6f}s "
+#         f"GET={get_time:.6f}s "
+#         f"BUSY={busy_time:.6f}s "
+#         f"total={total_time:.6f}"
+#     )
+#     #print("accept_redis",time.perf_counter()-total)
+#     return True, 
+
+# Pre-load Lua script on app startup to handle atomicity in a single round-trip
+ACCEPT_ORDER_LUA = """
+local lock_key = KEYS[1]
+local request_key = KEYS[2]
+local driver_id = ARGV[1]
+
+-- 1. Acquire Lock
+local won = redis.call('SET', lock_key, driver_id, 'NX', 'EX', 60)
+if not won then
+    return {0, "LOCKED"}
+end
+
+-- 2. Fetch Order Data
+local raw_data = redis.call('GET', request_key)
+if not raw_data then
+    redis.call('DEL', lock_key)
+    return {0, "EXPIRED"}
+end
+
+-- 3. Mark Driver Busy (Atomic Pipeline)
+redis.call('ZREM', 'available_drivers', driver_id)
+redis.call('HSET', 'driver:' .. driver_id, 'status', 'busy')
+
+return {1, raw_data}
+"""
+
+lua_accept_order = r.register_script(ACCEPT_ORDER_LUA)
+
 def accept_order_redis(order_id, driver_id):
-    total=time.perf_counter()
-    order_id = str(order_id)
-    driver_id = str(driver_id)
-    t = time.perf_counter()
-    won = r.set(f"order:{order_id}:lock", driver_id, nx=True, ex=60)
-
-    set_time = time.perf_counter() - t
-    if not won:
+    start=time.perf_counter()
+    lock_key = f"order:{order_id}:lock"
+    request_key = f"order_request:{order_id}:{driver_id}"
+    
+    # Executed atomically inside Redis engine
+    success, payload = lua_accept_order(keys=[lock_key, request_key], args=[driver_id])
+    
+    if not success:
         return False, None
-
-    key = f"order_request:{order_id}:{driver_id}"
-    t = time.perf_counter()
-    raw = r.get(key)
-    get_time = time.perf_counter() - t
-    if not raw:
-        # request expired, or was never sent to this driver — release the lock
-        # instead of leaving the order stuck for 60s with no one able to claim it
-        r.delete(f"order:{order_id}:lock")
-        return False, None
-
-    request = json.loads(raw)
-    t = time.perf_counter()
-    mark_driver_busy(driver_id)
-    busy_time = time.perf_counter() - t
-    #print(
-    #     f"REDIS "
-    #     f"SET={set_time:.6f}s "
-    #     f"GET={get_time:.6f}s "
-    #     f"BUSY={busy_time:.6f}s"
-    # )
-    #print("accept_redis",time.perf_counter()-total)
-    return True, request
+    print("redis_time=",time.perf_counter()-start)
+    return True, json.loads(payload)
 def delete_lock(order_id):
     r.delete(f"order:{order_id}:lock")
 # delete_lock("6a6f3511d9808c816b5d9930")

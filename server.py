@@ -941,10 +941,34 @@ def renderSellerOrders(res_name,res_id):
     except Exception as e:
         #print(e)
         return({"success":False})
+# @app.route("/accept_order", methods=["POST"])
+# @auth_driver
+# def accept_order_server():
+#     start=time.perf_counter()
+#     driver_id = g.driver_id
+#     data = request.get_json(silent=True) or {}
+#     order_id = data.get("order_id")
+
+#     if not order_id:
+#         return jsonify({"success": False, "message": "order_id is required"}), 400
+
+#     won, redis_data = accept_order_redis(order_id, driver_id)
+#     if not won:
+#         socketio.emit("order_taken", {"order_id": order_id}, room=f"driver_{driver_id}")
+#         return jsonify({"success": False, "message": "Order already taken"}), 409
+
+#     result = accept_delivery_order(order_id, driver_id, redis_data)
+#     socketio.emit("driver_assigned", {"order_id": order_id}, room="warehouse")
+
+#     if not result["success"]:
+#         delete_lock(order_id)
+#         return jsonify({"success": False, "message": result["message"]}), 400
+#     #print("accept_order_server",time.perf_counter()-start)
+#     return jsonify({"success": True, "order": result["order"]})
+from redis_db import r
 @app.route("/accept_order", methods=["POST"])
 @auth_driver
 def accept_order_server():
-    start=time.perf_counter()
     driver_id = g.driver_id
     data = request.get_json(silent=True) or {}
     order_id = data.get("order_id")
@@ -958,12 +982,12 @@ def accept_order_server():
         return jsonify({"success": False, "message": "Order already taken"}), 409
 
     result = accept_delivery_order(order_id, driver_id, redis_data)
-    socketio.emit("driver_assigned", {"order_id": order_id}, room="warehouse")
 
     if not result["success"]:
-        delete_lock(order_id)
+        r.delete(f"order:{order_id}:lock")
         return jsonify({"success": False, "message": result["message"]}), 400
-    #print("accept_order_server",time.perf_counter()-start)
+
+    socketio.emit("driver_assigned", {"order_id": order_id}, room="warehouse")
     return jsonify({"success": True, "order": result["order"]})
 @app.route("/driver/active_order",methods=["POST","GET"])
 @auth_driver

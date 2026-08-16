@@ -12,6 +12,17 @@
 # accept_delivery_order("6a6f3511d9808c816b5d9930","6a7b39442f2f1da998fb0928",{"amount":10})
 from redis_db import r
 r.delete(*r.keys("order_request:*"))
+# r.delete(*r.keys("order:*"))
+cursor = 0
+
+while True:
+    cursor, keys = r.scan(cursor, match="order:*", count=1000)
+
+    if keys:
+        r.delete(*keys)
+
+    if cursor == 0:
+        break
 print("deleted")
 from orderIds import orderIds
 import jwt,json
