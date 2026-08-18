@@ -19,114 +19,479 @@ const socket = io({ autoConnect: false });
 //     socket.emit('join_user_room', { order_id: order_id });
 // });
 let driverMarker = null;
-let map = null
-map = L.map("map").setView([17.385, 78.4867], 13);
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: "© OpenStreetMap contributors"
-}).addTo(map);
 let warehouseMarker = null;
 let driverRouteLine = null;
+let map = null;
 
 let currentDriverPosition = null;
 let animationFrame = null;
+
+let trackingOrderId = null;
+let warehouseLat = null;
+let warehouseLng = null;
+
+
+// ============================================================
+// DRIVER ASSIGNED
+// ============================================================
+
 socket.on("driver_assigned", (data) => {
-    const ordersList = document.getElementById("orders-list");
     console.log("Driver assigned:", data.order_id);
+    const ordersList = document.getElementById("orders-list");
 
     const cards = document.querySelectorAll(".order-card");
 
     cards.forEach(card => {
+
         const orderId = card
             .querySelector(".order-id")
             .textContent
             .replace("#", "")
             .trim();
 
-        if (orderId === String(data.order_id)) {
-            // Move this card to the very top
-            ordersList.prepend(card);
-
-            // Optional: make it visually noticeable
-            card.style.transition = "background-color 0.3s";
-            card.style.backgroundColor = "#fff8e1";
-            card.querySelector(".order-header .order-status").textContent = "Driver is Arriving..."
-            card.querySelector(".order-header .order-status").style.backgroundColor = "#25a140"
-            card.querySelector(".order-header .order-status").style.color = "blanchedalmond"
-            card.querySelector(".cancelBtn").style.display = "none";
-            const trackBtn = document.createElement("button");
-            trackBtn.className = "TrackOrderBtn statusBtn";
-            trackBtn.textContent = "Track Driver";
-            trackBtn.style.cssText = `
-                opacity: 1;
-                cursor: pointer;
-                visibility: visible;
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                width: calc(50% - 5px) !important;
-                margin-top: 14px !important;
-                padding: 11px 0 !important;
-                border-radius: 9px !important;
-                border: none !important;
-                font-family: var(--font-body);
-                font-weight: 700;
-                font-size: 13px;
-                letter-spacing: 0.03em;
-                cursor: pointer;
-                transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
-                display: inline-block;
-            `;
-            const controlBtn = card.querySelector("#controlBtn");
-            controlBtn.appendChild(trackBtn);
-            trackBtn.addEventListener("click", () => {
-                const orderid = card
-                    .querySelector(".order-id")
-                    .textContent
-                    .replace("#", "")
-                    .trim();
-                console.log("emitting")
-                socket.emit("track_order", { order_id: orderid });
-                console.log("Track:", orderid);
-                document.getElementById("map-block").classList.add("active")
-                if (!map) {
-                    map = L.map("map").setView([17.385, 78.4867], 13);
-
-                    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-                        attribution: "© OpenStreetMap contributors"
-                    }).addTo(map);
-                }
-                driverMarker = L.marker([17.385, 78.4867])
-                    .addTo(map)
-                    .bindPopup("Driver")
-                    .openPopup();
-
-                setTimeout(async () => {
-                    await map.invalidateSize();
-                }, 500);
-            });
-            setTimeout(() => {
-                card.style.backgroundColor = "";
-            }, 2000);
+        if (orderId !== String(data.order_id)) {
+            return;
         }
+
+        // Move card to top
+        ordersList.prepend(card);
+
+        // Visual indication
+        card.style.transition = "background-color 0.3s";
+        card.style.backgroundColor = "#fff8e1";
+
+        const status = card.querySelector(
+            ".order-header .order-status"
+        );
+
+        status.textContent = "Driver is Arriving...";
+        status.style.backgroundColor = "#25a140";
+        status.style.color = "blanchedalmond";
+
+        // Hide cancel button
+        const cancelBtn = card.querySelector(
+            "#controlBtn .cancelBtn"
+        );
+
+        if (cancelBtn) {
+            cancelBtn.style.display = "none";
+        }
+
+        // Prevent duplicate Track buttons
+        if (card.querySelector(".TrackOrderBtn")) {
+            return;
+        }
+
+        const trackBtn = document.createElement("button");
+
+        trackBtn.className = "TrackOrderBtn statusBtn";
+        trackBtn.textContent = "Track Driver";
+
+        trackBtn.style.cssText = `
+            opacity: 1;
+            cursor: pointer;
+            visibility: visible;
+            display: inline-block;
+        `;
+
+        const controlBtn = card.querySelector("#controlBtn");
+
+        controlBtn.appendChild(trackBtn);
+
+
+        // ====================================================
+        // TRACK DRIVER CLICK
+        // ====================================================
+
+        trackBtn.addEventListener("click", async () => {
+
+            trackingOrderId = orderId;
+
+            console.log("Tracking order:", trackingOrderId);
+
+            socket.emit("track_order", {
+                order_id: trackingOrderId
+            });
+
+
+            // Show map
+            document
+                .getElementById("map-block")
+                .classList.add("active");
+
+
+            // ------------------------------------------------
+            // Get warehouse coordinates
+            // ------------------------------------------------
+            //
+            // Replace these with however you store your
+            // warehouse coordinates.
+            //
+            // 17.395328416400673, 78.43148662789395
+            warehouseLat = Number(17.39532841640067);
+            warehouseLng = Number(78.43148662789395);
+
+
+            // ------------------------------------------------
+            // Initialize map only once
+            // ------------------------------------------------
+
+            if (!map) {
+
+                map = L.map("map");
+
+                L.tileLayer(
+                    "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+                    {
+                        attribution:
+                            "© OpenStreetMap contributors"
+                    }
+                ).addTo(map);
+            }
+
+
+            // ------------------------------------------------
+            // Warehouse marker
+            // ------------------------------------------------
+
+            if (!warehouseMarker) {
+
+                warehouseMarker = L.marker([
+                    warehouseLat,
+                    warehouseLng
+                ])
+                .addTo(map)
+                .bindPopup("Warehouse");
+            }
+            else {
+
+                warehouseMarker.setLatLng([
+                    warehouseLat,
+                    warehouseLng
+                ]);
+            }
+
+
+            // ------------------------------------------------
+            // Route line
+            // ------------------------------------------------
+
+            if (!driverRouteLine) {
+
+                driverRouteLine = L.polyline([], {
+                    weight: 5,
+                    opacity: 0.8
+                }).addTo(map);
+            }
+
+
+            // ------------------------------------------------
+            // Resize map after displaying it
+            // ------------------------------------------------
+
+            setTimeout(() => {
+                map.invalidateSize();
+            }, 300);
+
+
+            // ------------------------------------------------
+            // If driver location already exists,
+            // immediately calculate route
+            // ------------------------------------------------
+
+            if (currentDriverPosition) {
+
+                await updateDriverRoute(
+                    currentDriverPosition.lat,
+                    currentDriverPosition.lng
+                );
+
+                map.fitBounds(
+                    L.latLngBounds([
+                        warehouseMarker.getLatLng(),
+                        currentDriverPosition
+                    ]),
+                    {
+                        padding: [40, 40]
+                    }
+                );
+            }
+            else {
+
+                map.setView(
+                    [
+                        warehouseLat,
+                        warehouseLng
+                    ],
+                    13
+                );
+            }
+        });
+
+
+        // Reset card highlight
+        setTimeout(() => {
+            card.style.backgroundColor = "";
+        }, 2000);
     });
 });
-socket.on("update_driver_location", (data) => {
-    console.log("recieved new location", data);
-    let lat = Number(data.lat);
-    let lng = Number(data.lng);
+
+
+// ============================================================
+// DRIVER LOCATION
+// ============================================================
+
+socket.on("update_driver_location", async (data) => {
+
+    console.log(
+        "Received new location:",
+        data
+    );
+
+
+    // Ignore updates for another order
+    if (
+        trackingOrderId &&
+        String(data.order_id) !== String(trackingOrderId)
+    ) {
+        return;
+    }
+
+
+    const lat = Number(data.lat);
+    const lng = Number(data.lng);
+
+
+    if (
+        !Number.isFinite(lat) ||
+        !Number.isFinite(lng)
+    ) {
+        console.error(
+            "Invalid driver coordinates:",
+            data
+        );
+
+        return;
+    }
+
+
+    const newPosition = L.latLng(lat, lng);
+
+
+    // ========================================================
+    // FIRST DRIVER LOCATION
+    // ========================================================
+
     if (!driverMarker) {
 
-        driverMarker = L.marker([lat, lng])
-            .addTo(map)
-            .bindPopup("Driver");
+        driverMarker = L.marker([
+            lat,
+            lng
+        ])
+        .addTo(map)
+        .bindPopup("Driver");
 
-    } else {
+        currentDriverPosition = newPosition;
 
-        driverMarker.setLatLng([lat, lng]);
+
+        // Calculate road route
+        if (warehouseMarker) {
+
+            await updateDriverRoute(
+                lat,
+                lng
+            );
+
+
+            // Show both warehouse + driver
+            map.fitBounds(
+                L.latLngBounds([
+                    warehouseMarker.getLatLng(),
+                    newPosition
+                ]),
+                {
+                    padding: [40, 40]
+                }
+            );
+        }
+
+        return;
+    }
+
+
+    // ========================================================
+    // SMOOTH DRIVER MOVEMENT
+    // ========================================================
+
+    animateDriverMarker(
+        currentDriverPosition,
+        newPosition
+    );
+
+
+    currentDriverPosition = newPosition;
+});
+
+
+// ============================================================
+// SMOOTH MARKER ANIMATION
+// ============================================================
+
+function animateDriverMarker(from, to) {
+
+    if (!from) {
+        driverMarker.setLatLng(to);
+        return;
+    }
+
+
+    if (animationFrame) {
+        cancelAnimationFrame(animationFrame);
+    }
+
+
+    const startTime = performance.now();
+
+    // GPS updates every few seconds
+    // so animate between them
+    const duration = 2500;
+
+
+    function animate(now) {
+
+        const progress = Math.min(
+            (now - startTime) / duration,
+            1
+        );
+
+
+        // Smooth ease-in-out
+        const eased =
+            progress < 0.5
+                ? 2 * progress * progress
+                : 1 -
+                  Math.pow(
+                      -2 * progress + 2,
+                      2
+                  ) / 2;
+
+
+        const lat =
+            from.lat +
+            (to.lat - from.lat) * eased;
+
+
+        const lng =
+            from.lng +
+            (to.lng - from.lng) * eased;
+
+
+        driverMarker.setLatLng([
+            lat,
+            lng
+        ]);
+
+
+        if (progress < 1) {
+
+            animationFrame =
+                requestAnimationFrame(animate);
+
+        }
+    }
+
+
+    animationFrame =
+        requestAnimationFrame(animate);
+}
+
+
+// ============================================================
+// OSRM ROUTING
+// ============================================================
+
+async function updateDriverRoute(
+    driverLat,
+    driverLng
+) {
+
+    if (!warehouseMarker) {
+        return;
+    }
+
+
+    const warehousePosition =
+        warehouseMarker.getLatLng();
+
+
+    const warehouseLat =
+        warehousePosition.lat;
+
+    const warehouseLng =
+        warehousePosition.lng;
+
+
+    const url =
+        `https://router.project-osrm.org/route/v1/driving/` +
+        `${driverLng},${driverLat};` +
+        `${warehouseLng},${warehouseLat}` +
+        `?overview=full&geometries=geojson`;
+
+
+    try {
+
+        const response =
+            await fetch(url);
+
+
+        const result =
+            await response.json();
+
+
+        if (
+            !result.routes ||
+            !result.routes.length
+        ) {
+
+            console.error(
+                "No OSRM route found"
+            );
+
+            return;
+        }
+
+
+        const route =
+            result.routes[0];
+
+
+        // OSRM gives:
+        //
+        // [lng, lat]
+        //
+        // Leaflet wants:
+        //
+        // [lat, lng]
+
+        const coordinates =
+            route.geometry.coordinates.map(
+                ([lng, lat]) => [lat, lng]
+            );
+
+
+        driverRouteLine.setLatLngs(
+            coordinates
+        );
 
     }
-    map.setView([lat, lng]);
-})
+    catch (error) {
+
+        console.error(
+            "OSRM error:",
+            error
+        );
+    }
+}
 socket.on("order_status_updated", (data) => {
     const orderCards = document.querySelectorAll(".order-card");
     orderCards.forEach(card => {
@@ -320,3 +685,7 @@ initOrdersPage();
 document.addEventListener("spa:pageload", (e) => {
     if (e.detail.page === "orders") initOrdersPage();
 });
+
+document.getElementById("backBtn").addEventListener("click",()=>{
+    document.getElementById("map-block").classList.remove("active")
+})

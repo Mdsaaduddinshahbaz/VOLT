@@ -28,7 +28,8 @@ except Exception as e:
     print("Connection failed:", e)
 
 db=client["restaurants"]
-# db.restaurants_name.create_index([("location", "2dsphere")])
+db.restaurants_name.create_index([("location", "2dsphere")])
+
 # ##print(db.restaurants.index_information())
 restaurants_name=db["restaurants_name"]
 resturants_items=db["resturants_items"]
@@ -43,6 +44,8 @@ categories=db["categories"]
 MAX_RETRIES = 5
 users.create_index("email", unique=True)
 owners.create_index("email", unique=True)
+seller_orders.create_index([("driver_id", 1), ("delivery_status", 1)])
+seller_orders.create_index("parent_order_id")
 def add_resturant_owner(username,password):
     owners.insert_one({"username":username,"password":password})
 def add_resturants(name,address,phone,owner_id,long,latt,file_id="1nR05-X2jjSDUdZNbVmpYBr-bsqv5UhVz"):
@@ -1249,9 +1252,9 @@ def get_driver_home_stats(driver_id):
         return {"success": False}
 
     today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    today_orders = driver_orders.count_documents({
-        "driver_id": driver_id, "status": "delivered", "delivered_at": {"$gte": today_start}
-    })
+    today_orders = seller_orders.count_documents({
+    "driver_id": driver_id, "delivery_status": "delivered", "delivered_at": {"$gte": today_start}
+})
 
     earning_cursor = driver_earnings.aggregate([
         {"$match": {"driver_id": driver_id, "created_at": {"$gte": today_start}}},
@@ -1319,12 +1322,10 @@ def get_available_order_for_driver(driver_id):
     }
 
 
-def accept_delivery_order(order_id, driver_id,redis_data):
-    total=time.perf_counter()
+def accept_delivery_order(order_id, driver_id, redis_data):
     with client.start_session() as session:
         with session.start_transaction():
-            amount=redis_data["amount"]
-            start=time.perf_counter()
+            amount = redis_data["amount"]
             result = seller_orders.find_one_and_update(
                 {
                     "parent_order_id": str(order_id),
@@ -1334,28 +1335,7 @@ def accept_delivery_order(order_id, driver_id,redis_data):
                     "$set": {
                         "delivery_status": "accepted",
                         "driver_id": driver_id,
-                        "step": 0,
-                        "accepted_at": datetime.utcnow()
-                    }
-                },
-                return_document=ReturnDocument.AFTER,
-                session=session
-            )
-            seller_orders_insert = time.perf_counter() - start
-            if not result:
-                return {
-                    "success": False,
-                    "message": "Order already taken"
-                }
-            start=time.perf_counter()
-            driver_orders.insert_one(
-                    {
-                        "driver_id": driver_id,
-                        "order_id": order_id,
                         "amount": amount,
-                        "seller_id": str(result["restaurant_id"]),
-                        "restaurant_name": result.get("restaurant_name"),
-                        "token_no": result.get("token_no"),
                         "customer_name": redis_data.get("customer_name"),
                         "warehouse_lat": redis_data.get("warehouse_lat"),
                         "warehouse_lng": redis_data.get("warehouse_lng"),
@@ -1365,58 +1345,48 @@ def accept_delivery_order(order_id, driver_id,redis_data):
                         "warehouse_km": redis_data.get("warehouse_km"),
                         "delivery_otp": generate_delivery_otp(),
                         "step": 0,
-                        "status": "pending",
                         "accepted_at": datetime.utcnow()
-                    },
-                    session=session
-                )
-            driver_orders_insert = time.perf_counter() - start
-            start=time.perf_counter()
+                    }
+                },
+                return_document=ReturnDocument.AFTER,
+                session=session
+            )
+            if not result:
+                return {
+                    "success": False,
+                    "message": "Order already taken"
+                }
             drivers.update_one(
                 {"_id": ObjectId(driver_id)},
                 {"$inc": {"orders_accepted": 1}},
                 session=session
             )
-            drivers_insert = time.perf_counter() - start
 
-    items_seller={}
-    start=time.perf_counter()
-    for id,values in result["items"].items():
-        ##print(id,values)
-        items_seller[values["name"]]=values["qty"]
-    last_loop = time.perf_counter() - start
-    ##print(items_seller)
-    # #print("accept_order_mongo",time.perf_counter()-total)
-    total_time=time.perf_counter()-total
-    #print(
-    #     f"MONGO "
-    #     f"read={seller_orders_insert:.6f}s "
-    #     f"read={driver_orders_insert:.6f}s "
-    #     f"update={drivers_insert:.6f}s "
-    #     f"commit={last_loop:.6f}s "
-    #     f"total={total_time:.6f}"
-    # )
+    items_seller = {}
+    for _id, values in result["items"].items():
+        items_seller[values["name"]] = values["qty"]
+
     return {
         "success": True,
         "order": {
-            # "order_id": str(result["_id"]),
             "order_id": str(order_id),
-            "token_no":result["token_no"],
-            "amount":amount,
-            "items":items_seller
+            "token_no": result["token_no"],
+            "amount": amount,
+            "items": items_seller
         }
     }
+
 def get_active_driver_order(driver_id):
-    order = driver_orders.find_one({
+    order = seller_orders.find_one({
         "driver_id": driver_id,
-        "status": {"$nin": ["delivered", "cancelled"]}
+        "delivery_status": {"$nin": ["delivered", "cancelled"]}
     })
 
     if not order:
         return None
 
     return {
-        "order_id": order.get("order_id"),
+        "order_id": order.get("parent_order_id"),
         "token_no": order.get("token_no"),
         "amount": order.get("amount"),
         "store": order.get("restaurant_name"),
@@ -1430,34 +1400,31 @@ def get_active_driver_order(driver_id):
         "warehouse_km": order.get("warehouse_km"),
     }
 
+
 def decline_delivery_order(order_id, driver_id):
-    driver_orders.update_one({"_id": ObjectId(order_id)}, {"$addToSet": {"declined_by": driver_id}})
+    seller_orders.update_one({"_id": ObjectId(order_id)}, {"$addToSet": {"declined_by": driver_id}})
     drivers.update_one({"_id": ObjectId(driver_id)}, {"$inc": {"declines": 1}})
     return {"success": True}
 
 
 def advance_delivery_step(order_id, driver_id):
-    order = driver_orders.find_one({"order_id": order_id, "driver_id": driver_id})
+    order = seller_orders.find_one({"parent_order_id": str(order_id), "driver_id": driver_id})
     if not order:
         return {"success": False, "message": "Order not found or unauthorized"}
-    if order["step"] >= 3:
+    if order.get("step", 0) >= 3:
         return {"success": False, "message": "Already at final step — confirm delivery instead"}
 
     next_step = order["step"] + 1
-    driver_orders.update_one({"order_id": order_id}, {"$set": {"step": next_step}})
+    seller_orders.update_one({"_id": order["_id"]}, {"$set": {"step": next_step}})
     return {"success": True, "step": next_step}
 
 def confirm_delivery(order_id, driver_id):
-    order = driver_orders.find_one({"order_id":order_id, "driver_id": driver_id})
-    print(order)
+    order = seller_orders.find_one({"parent_order_id": str(order_id), "driver_id": driver_id})
     if not order:
         return {"success": False, "message": "Order not found or unauthorized"}
 
-    if order.get("status") == "delivered":
+    if order.get("delivery_status") == "delivered":
         return {"success": False, "message": "Order already delivered"}
-
-    # if order.get("delivery_otp") != entered_otp:
-    #     return {"success": False, "message": "Invalid delivery code"}
 
     base_pay = round(order["amount"] * 0.7, 2)
     distance_pay = round(order["amount"] * 0.3, 2)
@@ -1466,12 +1433,20 @@ def confirm_delivery(order_id, driver_id):
         try:
             with client.start_session() as session:
                 with session.start_transaction():
-                    res=driver_orders.update_one(
-                        {"order_id": order_id, "driver_id": driver_id, "status": {"$ne": "delivered"}},
-                        {"$set": {"status": "delivered", "delivered_at": datetime.utcnow()}},
+                    seller_orders.update_one(
+                        {"_id": order["_id"], "driver_id": driver_id, "delivery_status": {"$ne": "delivered"}},
+                        {"$set": {
+                            "delivery_status": "delivered",
+                            "delivered_at": datetime.utcnow(),
+                            "status": "completed"
+                        }},
                         session=session
                     )
-                    print("confirm delivery=",res.acknowledged)
+                    orders.update_one(
+                        {"_id": ObjectId(order["parent_order_id"])},
+                        {"$set": {"status": "completed"}},
+                        session=session
+                    )
                     driver_earnings.insert_one({
                         "driver_id": driver_id, "order_id": order_id,
                         "base_pay": base_pay, "distance_pay": distance_pay,
@@ -1494,23 +1469,23 @@ def confirm_delivery(order_id, driver_id):
     return {"success": False, "message": "Could not complete delivery, try again"}
 
 def get_driver_order_history(driver_id, range_="today"):
-    query = {"driver_id": driver_id, "status": {"$in": ["delivered", "cancelled"]}}
+    query = {"driver_id": driver_id, "delivery_status": {"$in": ["delivered", "cancelled"]}}
     now = datetime.utcnow()
     if range_ == "today":
-        query["created_at"] = {"$gte": now.replace(hour=0, minute=0, second=0, microsecond=0)}
+        query["accepted_at"] = {"$gte": now.replace(hour=0, minute=0, second=0, microsecond=0)}
     elif range_ == "week":
-        query["created_at"] = {"$gte": now - timedelta(days=7)}
+        query["accepted_at"] = {"$gte": now - timedelta(days=7)}
 
-    cursor = driver_orders.find(query).sort("created_at", -1)
+    cursor = seller_orders.find(query).sort("accepted_at", -1)
     history = []
     for o in cursor:
-        ts = o.get("delivered_at") or o["created_at"]
+        ts = o.get("delivered_at") or o.get("accepted_at")
         history.append({
             "id": str(o["_id"]),
-            "path": f"{o['restaurant_name']} → {o['customer_name']}",
-            "time": ts.strftime("%d %b, %I:%M %p"),
-            "amt": o["amount"],
-            "status": o["status"]
+            "path": f"{o['restaurant_name']} → {o.get('customer_name', 'Customer')}",
+            "time": ts.strftime("%d %b, %I:%M %p") if ts else "",
+            "amt": o.get("amount"),
+            "status": o.get("delivery_status")
         })
     return history
 def get_driver_earnings_summary(driver_id, range_="today"):
