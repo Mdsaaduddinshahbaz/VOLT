@@ -347,7 +347,7 @@ def store_orders(userid, coordinates):
 
             delete_cart(userid)
             #print("completed at ",start-time.perf_counter())
-            return restaurant_ids, seller_order_ids
+            return restaurant_ids, seller_order_ids,parent
 
         except OperationFailure as e:
             if "TransientTransactionError" in e.details.get("errorLabels", []):
@@ -380,6 +380,7 @@ def get_seller_ordes(res_id):
     for order in orders:
         data={
             "order_id":str(order["_id"]),
+            "user_order_id":str(order["parent_order_id"]),
             "token_no":order["token_no"],
             "user_id":order['user_id'],
             "items":order["items"],
@@ -1326,7 +1327,7 @@ def accept_delivery_order(order_id, driver_id,redis_data):
             start=time.perf_counter()
             result = seller_orders.find_one_and_update(
                 {
-                    "_id": ObjectId(order_id),
+                    "parent_order_id": str(order_id),
                     "status": "placed"
                 },
                 {
@@ -1398,7 +1399,8 @@ def accept_delivery_order(order_id, driver_id,redis_data):
     return {
         "success": True,
         "order": {
-            "order_id": str(result["_id"]),
+            # "order_id": str(result["_id"]),
+            "order_id": str(order_id),
             "token_no":result["token_no"],
             "amount":amount,
             "items":items_seller
@@ -1447,7 +1449,7 @@ def advance_delivery_step(order_id, driver_id):
 
 def confirm_delivery(order_id, driver_id):
     order = driver_orders.find_one({"order_id":order_id, "driver_id": driver_id})
-
+    print(order)
     if not order:
         return {"success": False, "message": "Order not found or unauthorized"}
 
@@ -1464,11 +1466,12 @@ def confirm_delivery(order_id, driver_id):
         try:
             with client.start_session() as session:
                 with session.start_transaction():
-                    driver_orders.update_one(
+                    res=driver_orders.update_one(
                         {"order_id": order_id, "driver_id": driver_id, "status": {"$ne": "delivered"}},
                         {"$set": {"status": "delivered", "delivered_at": datetime.utcnow()}},
                         session=session
                     )
+                    print("confirm delivery=",res.acknowledged)
                     driver_earnings.insert_one({
                         "driver_id": driver_id, "order_id": order_id,
                         "base_pay": base_pay, "distance_pay": distance_pay,

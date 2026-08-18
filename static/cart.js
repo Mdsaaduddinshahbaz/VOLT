@@ -119,7 +119,9 @@ async function initCartPage() {
         body: JSON.stringify({ user_id: userId })
     })
     const datas = await address.json()
+    
     if (datas.success) {
+        
         deliveryAdrs.textContent = datas.address[0].adrs_type + " - " + datas.address[0].address
         deliveryAdrs.dataset.long = datas.address[0].coordinates.long
         deliveryAdrs.dataset.lat = datas.address[0].coordinates.latt
@@ -132,7 +134,12 @@ async function initCartPage() {
                     `
         });
     }
+    const current_user = JSON.parse(localStorage.getItem("userLocation"));
 
+    console.log(current_user.latt);
+    deliveryAdrs.textContent = curr_addr
+    deliveryAdrs.dataset.long = current_user.long
+    deliveryAdrs.dataset.lat = current_user.latt
     function syncCartCacheQty(itemId, delta, unitprice, removed = false) {
         Object.values(restaurants).forEach((details) => {
             if (details.items[itemId]) {
@@ -247,8 +254,11 @@ async function initCartPage() {
     address_container.addEventListener("click", (e) => {
         const selected_option = e.target.closest(".address-option")
         const spans = selected_option.querySelectorAll("span");
+        // console.log(selected_option.dataset.long)
         typeaddrs.innerText = spans[0].textContent + " -"
         deliveryAdrs.textContent = spans[1].textContent
+        deliveryAdrs.dataset.long = selected_option.dataset.long
+        deliveryAdrs.dataset.lat = selected_option.dataset.latt
         address_container.classList.remove("show")
         overlay.classList.remove("show");
     })

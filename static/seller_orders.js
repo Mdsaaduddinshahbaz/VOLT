@@ -133,7 +133,7 @@ const ordersList = document.getElementById("orders-list");
 
 // const resId = pathParts[pathParts.length - 1];
 console.log(resId)
-    const socket = io();
+const socket = io();
 
 socket.on("connect", () => {
     console.log("Connected:", socket.id);
@@ -146,18 +146,27 @@ socket.on("new_order", () => {
     console.log("New order received → reloading...");
     loadOrders();   // 🔥 call your API again
 });
+let driverMarker = null;
+let map=null
+let warehouseMarker = null;
+let driverRouteLine = null;
+
+let currentDriverPosition = null;
+let animationFrame = null;
 socket.on("driver_assigned", (data) => {
     console.log("Driver assigned:", data.order_id);
 
     const cards = document.querySelectorAll(".order-card");
 
     cards.forEach(card => {
+        // const orderId = card
+        //     .querySelector(".order-id")
+        //     .textContent
+        //     .replace("#", "")
+        //     .trim();
         const orderId = card
             .querySelector(".order-id")
-            .textContent
-            .replace("#", "")
-            .trim();
-
+            .getAttribute("id")
         if (orderId === String(data.order_id)) {
             // Move this card to the very top
             ordersList.prepend(card);
@@ -165,13 +174,72 @@ socket.on("driver_assigned", (data) => {
             // Optional: make it visually noticeable
             card.style.transition = "background-color 0.3s";
             card.style.backgroundColor = "#fff8e1";
+            card.querySelector(".order-header .order-status").textContent="Driver is Arriving..."
+            card.querySelector(".order-header .order-status").style.backgroundColor="#25a140"
+            card.querySelector(".order-header .order-status").style.color="blanchedalmond"
+            card.querySelector("#controlBtn .cancelBtn").style.display = "none";
+            const trackBtn = document.createElement("button");
+            trackBtn.className = "TrackOrderBtn statusBtn";
+            trackBtn.textContent = "Track Driver";
+            trackBtn.style.cssText = `
+                opacity: 1;
+                cursor: pointer;
+                visibility: visible;
+                display: inline-block;
+            `;
+            const controlBtn = card.querySelector("#controlBtn");
+            controlBtn.appendChild(trackBtn);
+            trackBtn.addEventListener("click", () => {
+                // const orderid = card
+                //     .querySelector(".order-id")
+                //     .textContent
+                //     .replace("#", "")
+                //     .trim();
+                const orderid = card
+                    .querySelector(".order-id").getAttribute("id")
+                console.log("emitting")
+                socket.emit("track_order", {order_id: orderid});
+                console.log("Track:", orderid);
+                document.getElementById("map-block").classList.add("active")
+                if (!map) {
+                    map = L.map("map").setView([17.385, 78.4867], 13);
 
+                    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+                        attribution: "© OpenStreetMap contributors"
+                    }).addTo(map);
+                }
+                driverMarker = L.marker([17.385, 78.4867])
+                .addTo(map)
+                .bindPopup("Driver")
+                .openPopup();
+
+                setTimeout(async () => {
+                await map.invalidateSize();
+                }, 500);
+            });
             setTimeout(() => {
                 card.style.backgroundColor = "";
             }, 2000);
         }
     });
 });
+socket.on("update_driver_location",(data)=>{
+    console.log("recieved new location",data);
+    let lat = Number(data.lat);
+    let lng = Number(data.lng);
+    if (!driverMarker) {
+
+        driverMarker = L.marker([lat, lng])
+            .addTo(map)
+            .bindPopup("Driver");
+
+    } else {
+
+        driverMarker.setLatLng([lat, lng]);
+
+    }
+    map.setView([lat, lng]);
+})
 // Add this to seller_orders.js
 socket.on("seller_order_cancelled", (data) => {
     console.log("User cancelled order:", data.token_no);
@@ -187,8 +255,66 @@ socket.on("seller_order_cancelled", (data) => {
         }
     });
 });
-total_orders=0;
 async function loadOrders() {
+    const res = await fetch(`/seller/orders`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ "res_id": resId })
+    });
+    if(res.status ==401){
+        alert("unauthorized,Please Log in")
+        window.location.href="/login/seller";
+        return;    
+    }
+    const data = await res.json();
+    console.log(data)
+    if (!data.success) {
+        ordersList.innerHTML = `<p>Error loading orders - ${data.message}</p>`;
+        return;
+    }
+
+    const htmlParts = [];
+    let total_orders = 0;
+
+    data.orders.forEach(order => {
+        let total = 0;
+        let restaurantsHTML = "";
+        Object.entries(order.items).forEach(([itemName, detail]) => {
+            const itemTotal = detail.price * detail.qty;
+            total += itemTotal;
+            restaurantsHTML += `
+                <div class="item" item_id=${itemName}>
+                    <span>${detail.name} x ${detail.qty}</span>
+                    <span>₹${itemTotal}</span>
+                </div>`;
+        });
+
+        htmlParts.push(`
+            <div class="order-card" user_id=${order.user_id}>
+                <div class="order-header">
+                    <span class="order-id" id=${order.user_order_id}>#${order.order_id}</span>
+                    <span class="order-status status-${order.status}">${order.status}</span>
+                </div>
+                <div class="token-no">Token No: ${order.token_no}</div>
+                <div class="order-date">${order.time}</div>
+                ${restaurantsHTML}
+                <div class="total">Total: ₹${total}</div>
+                <div id=controlBtn>
+                <button class="completeBtn statusBtn" style="...">Completed</button>
+                <button class="cancelBtn statusBtn" style="...">Cancel Order</button>
+                </div>
+            </div>
+        `);
+
+        if (order.status === "placed") total_orders++;
+    });
+
+    ordersList.innerHTML = htmlParts.join(""); // single write
+    document.getElementById("active_orders").textContent = total_orders;
+    applyFilter();
+}
+total_orders=0;
+async function loadOrderss() {
     const res = await fetch(`/seller/orders`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -404,6 +530,8 @@ document.addEventListener("click", async (e) => {
         })
         const data = await res.json()
         if (data.success) {
+            console.log("emitted order_completed");
+            
             socket.emit("order_completed", {
                 order_id: orderId,
                 userid: userid,
@@ -427,6 +555,9 @@ document.addEventListener("click", async (e) => {
         }
     }
 });
+document.getElementById("backBtn").addEventListener("click",()=>{
+    document.getElementById("map-block").classList.remove("active")
+})
 const overlay=document.querySelector(".overlay")
 document.getElementById("menuToggle").onclick = function () {
   const sidebar=document.querySelector(".sidebar")
@@ -446,6 +577,10 @@ overlay.addEventListener("click",()=>{
   sidebar.style.display="none"
   sidebar.classList.remove("show")
 })
+// const map = L.map("map").setView([17.385, 78.4867], 13);
+// L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+//     attribution: "© OpenStreetMap contributors"
+// }).addTo(map);
 
 // const DashboardBtn=document.getElementById("DashboardBtn")
 // DashboardBtn.addEventListener("click",()=>{

@@ -1,6 +1,6 @@
 import time
-# import eventlet
-# eventlet.monkey_patch()
+import eventlet
+eventlet.monkey_patch()
 from database import (
     create_new_driver, get_active_driver_order, save_category, get_seller_analytics, get_resturantItem_price,
     accept_delivery_order, add_subcategory, add_resturant_items, check_existing_owner,
@@ -92,7 +92,7 @@ if redis_user and redis_pass:
     REDIS_URL = f"redis://{redis_user}:{redis_pass}@127.0.0.1:6379/0"
 else:
     REDIS_URL = "redis://127.0.0.1:6379/0"
-# REDIS_URL = f"redis://{redis_user}:{redis_pass}@{redis_host}:{redis_port}/0"
+REDIS_URL = f"redis://{redis_user}:{redis_pass}@{redis_host}:{redis_port}/0"
 #print("in server",REDIS_URL)
 socketio = SocketIO(app, cors_allowed_origins="*",message_queue=REDIS_URL)
 #print("ASYNC MODE:", socketio.async_mode)
@@ -103,6 +103,7 @@ from itsdangerous import URLSafeTimedSerializer
 
 serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
 def login_required(f):
+    print("in login required")
     @wraps(f)
     def wrapper(*args, **kwargs):
         # token = request.cookies.get("token")
@@ -134,7 +135,6 @@ def login_required(f):
             elif(g.type == "seller"):
                 g.res_id=payload["res_id"]
                 g.username=payload["username"]
-
         except jwt.InvalidTokenError:
             # response=jsonify({"success": False}), 401
             # return jsonify({"success": False}), 401
@@ -211,46 +211,51 @@ def generate_verification_token(email,role):
         }, salt="email-verification")
 
 def send_verification_email(user_email,role):
-    #print("in send varification")
-    #print("generating token")
-    token = generate_verification_token(user_email,role)
-    #print("verify url")
-    verify_url = url_for(
-        "verify_email",
-        token=token,
-        _external=True
-    )
-    #print("msg")
-    # msg = Message(
-    #     subject="Verify Your Email",
-    #     sender=app.config["MAIL_USERNAME"],
-    #     recipients=[user_email]
-    # )
+    try:
+        #print("in send varification")
+        #print("generating token")
+        token = generate_verification_token(user_email,role)
+        #print("verify url")
+        print("token generated")
+        verify_url = url_for(
+            "verify_email",
+            token=token,
+            _external=True
+        )
+        print("after verify url")
+        #print("msg")
+        # msg = Message(
+        #     subject="Verify Your Email",
+        #     sender=app.config["MAIL_USERNAME"],
+        #     recipients=[user_email]
+        # )
 
-    response = requests.post(
-        "https://api.brevo.com/v3/smtp/email",
-        headers={
-            "accept": "application/json",
-            "api-key": brevo_api,
-            "content-type": "application/json"
-        },
-        json={
-            "sender": {"email": "dummy.mail.saad@gmail.com"},
-            "to": [{"email": user_email}],
-            "subject": "Verify Email",
-            "htmlContent": f"""
-            <p>Click below to verify:</p>
-            <a href="{verify_url}">{verify_url}</a>
-            """
-        }
-    )
-    #print(response.status_code,flush=True)
-    #print(response.text,flush=True)
-    if(response.status_code==201):
-        #print("done sending email")
-        return 1
-    else:
-        return 0
+        response = requests.post(
+            "https://api.brevo.com/v3/smtp/email",
+            headers={
+                "accept": "application/json",
+                "api-key": brevo_api,
+                "content-type": "application/json"
+            },
+            json={
+                "sender": {"email": "dummy.mail.saad@gmail.com"},
+                "to": [{"email": user_email}],
+                "subject": "Verify Email",
+                "htmlContent": f"""
+                <p>Click below to verify:</p>
+                <a href="{verify_url}">{verify_url}</a>
+                """
+            }
+        )
+        print(response.status_code)
+        #print(response.text,flush=True)
+        if(response.status_code==201):
+            #print("done sending email")
+            return 1
+        else:
+            return 0
+    except Exception as e:
+        print("send verification error",str(e))
 
 
 # #print("Email sent")
@@ -758,6 +763,7 @@ def seller_page(name,seller_id):
 def confirm_delivery_route():
     data = request.get_json(silent=True) or {}
     order_id = data.get("order_id")
+    print('order_id',order_id)
     # otp = str(data.get("otp", "")).strip()
 
     # if not order_id or not otp:
@@ -865,14 +871,14 @@ def store_order():
         if result is False:
             return jsonify({"success": False, "message": "Unable to place order, please try again"}), 500
         # #print("after result",result)
-        restaurant_ids, seller_order_ids = result
+        restaurant_ids, seller_order_ids,user_order_id = result
         socketio.emit("new_order", {"msg": "refresh"}, room="warehouse")
 
         for res_id, seller_order_id in zip(restaurant_ids, seller_order_ids):
             # #print("resid",res_id)
             res_location = get_restaurant_location(res_id)
-            # if res_location:
-            #     search_driver.delay(res_location, username, coordinates, seller_order_id, 10)
+            if res_location:
+                search_driver.delay(res_location, username, coordinates, user_order_id, 10)
         #print("/store_order completed at",time.perf_counter()-start)
         seller_order_id = str(seller_order_ids[0])
         return jsonify({"success": True,"id":seller_order_id})
@@ -920,7 +926,7 @@ def getsellerOrders():
         #print("orders in server",orders)
         return({"success":True,"orders":orders})
     except Exception as e:
-        #print(e)
+        print(e)
         return({"success":False})
 # @app.post("/seller_orders")
 # def store_seller_orde():
@@ -948,19 +954,22 @@ def accept_order_server():
     driver_id = g.driver_id
     data = request.get_json(silent=True) or {}
     order_id = data.get("order_id")
-
+    print("order_id",order_id)
     if not order_id:
         return jsonify({"success": False, "message": "order_id is required"}), 400
 
     won, redis_data = accept_order_redis(order_id, driver_id)
+    print("won")
     if not won:
+        print("not won")
         socketio.emit("order_taken", {"order_id": order_id}, room=f"driver_{driver_id}")
         return jsonify({"success": False, "message": "Order already taken"}), 409
 
     result = accept_delivery_order(order_id, driver_id, redis_data)
     socketio.emit("driver_assigned", {"order_id": order_id}, room="warehouse")
-
+    socketio.emit("driver_assigned", {"order_id": order_id}, room=order_id)
     if not result["success"]:
+        print(result)
         delete_lock(order_id)
         return jsonify({"success": False, "message": result["message"]}), 400
     #print("accept_order_server",time.perf_counter()-start)
@@ -982,6 +991,47 @@ def renderdriverOrders(driver_id):
 # @auth_driver
 def renderdriverOrdersss():
     return render_template("driver_ui.html")
+# @socketio.on('join_user_room')
+# @login_required
+# def handle_user_join(data):
+#     try:
+#         print("hollas")
+#         # user_id = data['user_id']
+#         user_id=g.user_id
+#         print("join_user_room",user_id)
+#         join_room(user_id)
+#         #print(f"User joined: {user_id}")
+#     except Exception as e:
+#         print(e)
+#         return({"success":False})
+@socketio.on('join_user_room')
+@login_required
+def handle_user_join(data):
+    try:
+        print("hollas")
+        # user_id = data['user_id']
+        # user_id=g.user_id
+        order_id=data["order_id"]
+        print("join_user_room",order_id)
+        join_room(order_id)
+        #print(f"User joined: {user_id}")
+    except Exception as e:
+        print(e)
+        return({"success":False})
+@socketio.on("track_order")
+def tracks_order(data):
+    order_id = data["order_id"]
+    print("orderid in track order server",order_id)
+    join_room(f"track_order:{order_id}")
+@socketio.on("driver_location")
+def driver_location(data):
+    order_id = data["order_id"]
+    print("orderid in driver_location server",order_id)
+    emit(
+        "update_driver_location",
+        data,
+        room=f"track_order:{order_id}"
+    )
 @socketio.on('join_seller_room')
 @login_required
 def handle_join(data):
@@ -990,25 +1040,15 @@ def handle_join(data):
         seller_id=g.res_id
         join_room("warehouse")
     except Exception as e:
-        #print(e)
+        print(e)
         return({"success":False})
 def notify_new_order(seller_id, order):
     try:
         socketio.emit('new_order', order, room="warehouse")
     except Exception as e:
-        #print(e)
+        print(e)
         return({"success":False})
-@socketio.on('join_user_room')
-@login_required
-def handle_user_join(data):
-    try:
-        # user_id = data['user_id']
-        user_id=g.user_id
-        join_room(user_id)
-        #print(f"User joined: {user_id}")
-    except Exception as e:
-        #print(e)
-        return({"success":False})
+
 @socketio.on("join_driver_room")
 def join_driver_room(data):
     token = request.cookies.get("driver_token")
@@ -1043,10 +1083,20 @@ def leave_drivers_room(data):
     room = f"driver_{driver_id}"
     leave_room(room)
     emit("left", {"room": room})
-
+# @socketio.on("track_order")
+# def track_order(data):
+#     order_id=data["order_id"]
+#     print("in track order")
+#     join_room(f"track_order:{order_id}")
+# @socketio.on("driver_location")
+# def driver_location(data):
+#     print("in driver location")
+#     order_id=data["order_id"]
+#     emit("update_driver_location",data,room=f"track_order:{order_id}")
 
 @socketio.on("leave_driver_room")
 def leave_drivers_room(data):
+    print(data)
     driver_id = data["driver_id"]
     
     #print("driver_id room:", driver_id)
@@ -1063,7 +1113,7 @@ def leave_drivers_room(data):
 @login_required
 def handle_order_completed(data):
     try:
-        #print("Order completed:", data)
+        print("Order completed:", data)
 
         token_no = data.get("token_no")
         # user_id=data.get("userid")
@@ -1074,7 +1124,7 @@ def handle_order_completed(data):
         if(user_id==None):
             return {"success": False, "message": "Unauthorized order"}
         status=data.get("status")
-
+        print("user_id",user_id)
         # send update to USER
         socketio.emit(
             "order_status_updated",
@@ -1217,6 +1267,7 @@ def validate():
                 )
                 return response
             else:
+                print("in else block")
                 res_email=send_verification_email(data["email"],"user")
                 if (res_email == 1):
                     return jsonify({
@@ -1595,11 +1646,12 @@ def return_seller_statistics():
 @socketio.on("user_cancelled_order")
 def handle_user_cancel(data):
     try:
+        print("in cancelled order")
         # data['res_ids'] is now a LIST: ["res1", "res2"]
         res_list = data.get("res_ids", [])
         
         for res_id in res_list:
-            emit("seller_order_cancelled", data, room=res_id)
+            emit("seller_order_cancelled", data, room="warehouse")
     except Exception as e:
         #print(e)
         return({"success":False})
@@ -2426,7 +2478,7 @@ def set_offline():
 
 
 if __name__ == "__main__":
-    socketio.run(app, debug=False)  # never True once FLASK_ENV=production
+    socketio.run(app, debug=True)  # never True once FLASK_ENV=production
 # from waitress import serve
 
 # serve(

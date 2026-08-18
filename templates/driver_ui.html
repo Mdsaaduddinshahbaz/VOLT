@@ -1794,13 +1794,16 @@
                             <h3>Earnings breakdown</h3>
                         </div>
                         <div class="breakdown" id="earningsBreakdown">
-                            <div class="breakdown-row"><span class="slate">Base pay</span><span class="n" id="bdBase">₹0</span>
+                            <div class="breakdown-row"><span class="slate">Base pay</span><span class="n"
+                                    id="bdBase">₹0</span>
                             </div>
-                            <div class="breakdown-row"><span class="slate">Distance pay</span><span
-                                    class="n" id="bdDistance">₹0</span></div>
-                            <div class="breakdown-row"><span class="slate">Bonus</span><span class="n" id="bdBonus">₹0</span>
+                            <div class="breakdown-row"><span class="slate">Distance pay</span><span class="n"
+                                    id="bdDistance">₹0</span></div>
+                            <div class="breakdown-row"><span class="slate">Bonus</span><span class="n"
+                                    id="bdBonus">₹0</span>
                             </div>
-                            <div class="breakdown-row"><span class="slate">Tips</span><span class="n" id="bdTip">₹0</span></div>
+                            <div class="breakdown-row"><span class="slate">Tips</span><span class="n"
+                                    id="bdTip">₹0</span></div>
                             <div class="breakdown-row"><span>Total</span><span class="n" id="bdTotal">₹0</span></div>
                         </div>
                     </section>
@@ -2002,7 +2005,8 @@
                     </div>
 
                     <div class="items-card">
-                        <div class="head"><span class="t">Order items</span><span class="c" id="odItemCount">0 items</span></div>
+                        <div class="head"><span class="t">Order items</span><span class="c" id="odItemCount">0
+                                items</span></div>
                         <ul id="odItems">
                         </ul>
                     </div>
@@ -2067,6 +2071,76 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         /* ============================================================
+           INIT — resolve auth, then restore any in-progress delivery
+           ============================================================ */
+        (async function init() {
+            showScreen('screen-login');
+
+            const loggedIn = await checkAuth();
+            if (!loggedIn) {
+                showScreen('screen-login');
+                return;
+            }
+
+            restoreSession();
+
+            // if nothing survived in sessionStorage (fresh tab / app reopen),
+            // fall back to asking the backend if there's an order in flight
+            // if (state.activeOrder) {
+
+            // }
+
+            socket.connect();
+            fetchHomeStats();
+            updateOnlineUI();
+
+            if (state.activeOrder) {
+                renderOrderDetail();
+                showScreen('screen-order-detail');
+            } else {
+                showScreen('main-app');
+                switchTab('home');
+                renderHomeStatus();
+            }
+            try {
+                const res = await fetch('/driver/active_order');
+                const data = await res.json();
+                console.log(data);
+
+                if (data.success && data.order) {
+                    const o = data.order;
+                    state.activeOrder = {
+                        order_id: o.order_id,
+                        id: 'VP' + o.token_no,
+                        store: o.store,
+                        customer: o.customer,
+                        amt: o.amount,
+                        customer_dist: o.customer_km,
+                        warehouse_dist: o.warehouse_km,
+                        items: o.items || {}
+                    };
+                    state.odStep = o.step || 0;
+                    state.recent_order = {
+                        warehouse_lat: o.warehouse_lat,
+                        warehouse_lng: o.warehouse_lng,
+                        customer_lat: o.customer_lat,
+                        customer_lng: o.customer_lng
+                    };
+                    state.online = true;
+                    saveSession();
+                } else {
+                    // Server says there is no active order
+                    state.activeOrder = null;
+                    state.recent_order = null;
+                    state.odStep = 0;
+                    saveSession();
+                }
+
+            } catch (err) {
+                console.error('active_order lookup failed', err);
+            }
+        })();
+        /* ============================================================
            SOCKET SETUP (connects only once we know we're authenticated)
            ============================================================ */
         let driver_id = null;
@@ -2089,6 +2163,10 @@
                 showToast('Order was taken by another rider');
             }
         });
+
+        socket.on("update_driver_location",(data)=>{
+            
+        })
 
         /* ============================================================
            STATE
@@ -2202,7 +2280,7 @@
         }
 
         function logout() {
-            fetch('/logout/driver').catch(() => {});
+            fetch('/logout/driver').catch(() => { });
             clearSession();
             driver_id = null;
             state.activeOrder = null;
@@ -2223,11 +2301,11 @@
         async function fetchHomeStats() {
             try {
                 console.log("in fetch home stats");
-                
+
                 const res = await fetch('/driver/home_stats', { method: 'POST' });
                 const data = await res.json();
                 console.log(data);
-                
+
                 if (data.success) {
                     document.getElementById('statEarnings').textContent = '₹' + data.earnings_today;
                     document.getElementById('statOrders').textContent = data.orders_today;
@@ -2292,7 +2370,7 @@
            ============================================================ */
         function toggleOnline() {
             console.log("online now");
-            
+
             state.online = !state.online;
             updateOnlineUI();
             renderHomeStatus();
@@ -2349,12 +2427,14 @@
         function triggerIncomingOrder(store, amt, distance, customer_name, order_id, customer_dist, warehouse_dist) {
             const pick = { store: store, customer: customer_name, addr: "", dist: distance, amt: amt, order_id: order_id, customer_dist: customer_dist, warehouse_dist: warehouse_dist };
             state.pendingOrder = pick;
+            console.log("trigger incomming order data",pick);
+            
             document.getElementById('sheetPickupName').textContent = store;
             document.getElementById('sheetAmt').textContent = '+₹' + amt;
             document.getElementById('sheetDist').textContent = distance + ' · drop near ' + customer_name + "'s location";
             document.getElementById('incomingOverlay').classList.add('show');
 
-            state.countdown = 15;
+            state.countdown = 60;
             const circumference = 132;
             document.getElementById('ringNum').textContent = state.countdown;
             document.getElementById('ringFg').style.strokeDasharray = circumference;
@@ -2397,6 +2477,8 @@
         }
 
         async function acceptOrder() {
+            console.log("pending order data",state.pendingOrder);
+            
             const p = state.pendingOrder;
             try {
                 const res = await fetch("/accept_order", {
@@ -2405,7 +2487,8 @@
                     body: JSON.stringify({ order_id: p.order_id })
                 });
                 const data = await res.json();
-
+                console.log("/accept_order data",data);
+                
                 if (data.success) {
                     clearInterval(state.countdownTimer);
                     hideIncomingSheet();
@@ -2417,7 +2500,10 @@
                         amt: data.order.amount, customer_dist: p.customer_dist, warehouse_dist: p.warehouse_dist,
                         items: data.order.items
                     };
+                    console.log("active order updated",state.activeOrder);
+                    
                     state.odStep = 0;
+                    startLocationTracking(state.activeOrder.order_id)
                     saveSession();
                     renderHomeStatus();
                     renderOrderDetail();
@@ -2475,15 +2561,15 @@
 
             const coords = state.recent_order;
             console.log(state);
-            
+
             if (!coords) return;
-            console.log('holla',coords);
+            console.log('holla', coords);
             // ('holla')
             const warehouse_marker = L.marker([coords.warehouse_lat, coords.warehouse_lng]).addTo(map);
             state.mapLayers.push(warehouse_marker);
             warehouse_marker.bindPopup("Warehouse").openPopup();
             console.log("after warehouse");
-            
+
             const customer_marker = L.marker([coords.customer_lat, coords.customer_lng]).addTo(map);
             state.mapLayers.push(customer_marker);
             customer_marker.bindPopup("Customer").openPopup();
@@ -2514,18 +2600,22 @@
         }
 
         function openNavigation(lat, lng) {
-            const url =
-                `https://www.google.com/maps/dir/?api=1` +
-                `&destination=${lat},${lng}` +
-                `&travelmode=driving`;
-            window.open(url, "_blank");
+            // const url =
+            //     `https://www.google.com/maps/dir/?api=1` +
+            //     `&destination=${lat},${lng}` +
+            //     `&travelmode=driving`;
+            // window.open(url, "_blank");
         }
 
         function handleActionButton() {
+            console.log("in handle action button");
+            
             const c = state.recent_order;
             if (!c || !state.activeOrder) return;
 
             if (state.odStep === 3) {
+                navigator.geolocation.clearWatch(locationWatchId);
+                locationWatchId = null;
                 document.getElementById('deliveryOtpOverlay').classList.add('show');
                 setTimeout(() => document.querySelector('#deliveryOtpOverlay .otp-box').focus(), 150);
                 return;
@@ -2539,11 +2629,12 @@
             // browsers can suspend/reload this tab while Maps has focus, so we
             // can't rely on anything async running after window.open().
             state.odStep++;
+            // startLocationTracking(state.activeOrder.order_id)
             saveSession();
             renderHomeStatus();
             renderOrderDetail();
             if (state.odStep === 3) showToast('Arrived at drop location');
-
+            console.log(state.activeOrder)
             persistStepInBackground(state.activeOrder.order_id);
 
             if (destination) openNavigation(destination[0], destination[1]);
@@ -2761,10 +2852,10 @@
                 async (position) => {
                     let lat = position.coords.latitude;
                     let lng = position.coords.longitude;
-                    lat= 17.388879
-                    lng= 78.428223
-                    console.log(lat,lng);
-                    
+                    lat = 17.388879
+                    lng = 78.428223
+                    console.log(lat, lng);
+
                     try {
                         const res = await fetch("/partner_online", {
                             method: "POST",
@@ -2790,77 +2881,42 @@
                 }
             );
         }
-
-        /* ============================================================
-           INIT — resolve auth, then restore any in-progress delivery
-           ============================================================ */
-        (async function init() {
-            showScreen('screen-login');
-
-            const loggedIn = await checkAuth();
-            if (!loggedIn) {
-                showScreen('screen-login');
-                return;
+        
+        let locationWatchId = null;
+        let lastLocationSent = 0;
+        function startLocationTracking(orderId) {
+            if (locationWatchId !== null) {
+                return; // already tracking
             }
 
-            restoreSession();
+            locationWatchId = navigator.geolocation.watchPosition(
+                (position) => {
+                    const now = Date.now();
+                    console.log("postion obtained",position)
+                    // Send at most once every 3 seconds
+                    // if (now - lastLocationSent < 3000) {
+                    //     return;
+                    // }
 
-            // if nothing survived in sessionStorage (fresh tab / app reopen),
-            // fall back to asking the backend if there's an order in flight
-            // if (state.activeOrder) {
-                
-            // }
+                    lastLocationSent = now;
 
-            socket.connect();
-            fetchHomeStats();
-            updateOnlineUI();
-
-            if (state.activeOrder) {
-                renderOrderDetail();
-                showScreen('screen-order-detail');
-            } else {
-                showScreen('main-app');
-                switchTab('home');
-                renderHomeStatus();
-            }
-            try {
-                    const res = await fetch('/driver/active_order');
-                    const data = await res.json();
-                    console.log(data);
-                    
-                    if (data.success && data.order) {
-                        const o = data.order;
-                        state.activeOrder = {
-                            order_id: o.order_id,
-                            id: 'VP' + o.token_no,
-                            store: o.store,
-                            customer: o.customer,
-                            amt: o.amount,
-                            customer_dist: o.customer_km,
-                            warehouse_dist: o.warehouse_km,
-                            items: o.items || {}
-                        };
-                        state.odStep = o.step || 0;
-                        state.recent_order = {
-                            warehouse_lat: o.warehouse_lat,
-                            warehouse_lng: o.warehouse_lng,
-                            customer_lat: o.customer_lat,
-                            customer_lng: o.customer_lng
-                        };
-                        state.online = true;
-                        saveSession();
-                    }else {
-                        // Server says there is no active order
-                        state.activeOrder = null;
-                        state.recent_order = null;
-                        state.odStep = 0;
-                        saveSession();
-                    }
-                    
-                } catch (err) {
-                    console.error('active_order lookup failed', err);
+                    socket.emit("driver_location", {
+                        order_id: orderId,
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude
+                    });
+                },
+                (error) => {
+                    console.error("GPS error:", error);
+                },
+                {
+                    enableHighAccuracy: true,
+                    maximumAge: 5000,
+                    timeout: 30000
                 }
-        })();
+            );
+        }
+        
     </script>
 </body>
 

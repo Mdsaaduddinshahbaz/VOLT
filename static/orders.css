@@ -130,7 +130,37 @@ body {
     margin-bottom: 6px;
     filter: drop-shadow(0 6px 0 var(--line));
 }
-
+#map{
+    position: absolute;
+    z-index: 435;
+    left: 0;
+    width: 100%;
+    background: white;
+    height: 100%;
+    border: 2px solid black;
+}
+#map-block{
+    display: none;
+    top: 0;
+    position: absolute;
+    height: 100%;
+    z-index: 12222222;
+    background: white;
+    height: 100%;
+    left: 0;
+    width: 100%;
+}
+#map-block.active{
+    display: block !important;
+}
+#mapTop{
+        height: 10%;
+        display: flex;
+    align-items: center;
+    gap: 18px;
+    background-color:#6E1B12 !important;
+    color: white;
+}
 .empty-state h1 {
     font-family: var(--font-display);
     font-weight: 400;

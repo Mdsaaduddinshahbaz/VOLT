@@ -2,7 +2,7 @@ import os
 import json
 import redis
 from dotenv import load_dotenv
-# from celery_worker import celery
+from celery_worker import celery
 from flask_socketio import SocketIO
 load_dotenv(override=True)
 
@@ -15,7 +15,7 @@ if USERNAME and PASSWORD:
 else:
     REDIS_URL = "redis://127.0.0.1:6379/0"
 # REDIS_URL = f"redis://{USERNAME}:{PASSWORD}@{HOST}:{PORT}/0"
-#print("in redis",REDIS_URL)
+print("in redis",REDIS_URL)
 socketio=SocketIO(message_queue=REDIS_URL)
 
 # -------------------------
@@ -24,9 +24,9 @@ socketio=SocketIO(message_queue=REDIS_URL)
 pool = redis.ConnectionPool(
     host=HOST,
     port=PORT,
-    # username=USERNAME,
-    # password=PASSWORD,
-    # max_connections=30,
+    username=USERNAME,
+    password=PASSWORD,
+    max_connections=30,
     # timeout=5,
     decode_responses=True,
     db=0,
@@ -321,7 +321,7 @@ def mark_driver_available(driver_id, lat, lng):
     return update_driver_location(driver_id, lat, lng)
 
 
-# @celery.task
+@celery.task
 def search_driver(res_loc, username, user_coordinates, order_id, count=10):
 
     base_pay = 20

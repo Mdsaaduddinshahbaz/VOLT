@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='seller_dashboard.css') }}">
 </head>
 <body> -->
-    <!-- ===== SIDEBAR ===== -->
+<!-- ===== SIDEBAR ===== -->
 <!-- <aside class="sidebar">
   <div class="brand">
     <button id="hideCategoryBtn">+</button>
@@ -52,36 +52,53 @@ Orders
 {% endblock %}
 {% block styles %}
 <link rel="stylesheet" href="{{ url_for('static', filename='seller_orders.css') }}">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 {% endblock %}
 
 {% block content %}
-    <!-- <div class="filter">
+<!-- <div class="filter">
         <button>filters</button>
     </div> -->
-    <div class="overlay" id="overlayContainer"></div>
-    <div class="orders-container">
-    <!-- <h1>Your Orders</h1> -->
-    <div class="header">
-        <div style="display: flex;">
-        <button id="menuToggle" class="menu-toggle">
-          ☰
-        </button>
-        <h1>Your Orders</h1>
-        </div>
-        <select id="filterDropdown">
-            <option value="placed">Pending</option>
-            <option value="all">All Orders</option>
-            <option value="completed">Completed</option>
-            <option value="canceled">Canceled</option>
-        </select>
+<div class="overlay" id="overlayContainer"></div>
+<div class="orders-container">
+  <!-- <h1>Your Orders</h1> -->
+  <div class="header">
+    <div style="display: flex;">
+      <button id="menuToggle" class="menu-toggle">
+        ☰
+      </button>
+      <h1>Your Orders</h1>
     </div>
-    <p id="noOrdersMessage" style="display: none;"></p>
-    <div id="orders-list"></div>
+    <select id="filterDropdown">
+      <option value="placed">Pending</option>
+      <option value="all">All Orders</option>
+      <option value="completed">Completed</option>
+      <option value="canceled">Canceled</option>
+    </select>
+  </div>
+  <div id="map-block">
+    <div id="mapTop" style="background: beige;">
+      <!-- <span><-</span> -->
+      <img src="{{ url_for('static', filename='arrow.png') }}" alt="" style=" width: 32px; height: 31px; margin-left: 12px;" id="backBtn">
+      <span style="font-size: 19px;">Track Order</span>
+    </div>
+    <div id="map"></div>
+  </div>
+  <!-- position: absolute;
+    z-index: 435;
+    left: 0;
+    width: 100%;
+    background: white;
+    height: 100%;
+    border: 2px solid black; -->
+  <p id="noOrdersMessage" style="display: none;"></p>
+  <div id="orders-list"></div>
 </div>
 <div style="margin-bottom: 40px;">
 </div>
 {% endblock %}
 {% block scripts %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="{{ url_for('static', filename='seller_orders.js') }}"></script>
 {% endblock %}

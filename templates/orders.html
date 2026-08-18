@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="../static/cart.css">
     <link rel="stylesheet" href="../static/home.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="../static/orders.css">
 </head>
 
@@ -73,6 +74,14 @@
         <!-- <div class="res_namesss" style="display: flex;justify-content: space-between;margin-bottom: 10px;">
             <span class="order-status status-placed">placed</span>
             </div> -->
+        <div id="map-block">
+    <div id="mapTop" style="background: beige;">
+      <!-- <span><-</span> -->
+      <img src="{{ url_for('static', filename='arrow.png') }}" alt="" style=" width: 32px; height: 31px; margin-left: 12px;">
+      <span style="font-size: 19px;">Track Order</span>
+    </div>
+    <div id="map"></div>
+  </div>
     </div>
     </div>
     <!-- <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script> -->
@@ -80,6 +89,7 @@
      <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
       <script src="../static/spa_router.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="../static/orders.js"></script>
       <script>
         lucide.createIcons();
