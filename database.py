@@ -1469,6 +1469,7 @@ def confirm_delivery(order_id, driver_id):
     return {"success": False, "message": "Could not complete delivery, try again"}
 
 def get_driver_order_history(driver_id, range_="today"):
+    range_="week"
     query = {"driver_id": driver_id, "delivery_status": {"$in": ["delivered", "cancelled"]}}
     now = datetime.utcnow()
     if range_ == "today":
@@ -1490,6 +1491,7 @@ def get_driver_order_history(driver_id, range_="today"):
     return history
 def get_driver_earnings_summary(driver_id, range_="today"):
     now = datetime.utcnow()
+    range_="week"
     if range_ == "today":
         start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     elif range_ == "week":

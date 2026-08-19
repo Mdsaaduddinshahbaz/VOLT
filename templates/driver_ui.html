@@ -2755,7 +2755,8 @@
                     body: JSON.stringify({ range })
                 });
                 const data = await res.json();
-
+                console.log(data);
+                
                 if (!data.success || !data.history.length) {
                     list.innerHTML = '<div style="text-align:center; padding:20px; color:var(--slate);">No orders yet</div>';
                     return;

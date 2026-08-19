@@ -812,6 +812,7 @@ def driver_home_stats_route():
 @auth_driver
 def driver_history_route():
     data = request.get_json(silent=True) or {}
+    print("driver_id",g.driver_id)
     return jsonify({"success": True, "history": get_driver_order_history(g.driver_id, data.get("range", "today"))})
 
 
