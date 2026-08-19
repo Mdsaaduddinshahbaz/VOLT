@@ -160,29 +160,54 @@ document.addEventListener("DOMContentLoaded", async () => {
         const mergedd = mergeMenuWithCart(data, datas, res_id);
         loading.style.display = "none";
 
-        const html = Object.values(mergedd).map((item) => {
-            const controls = item.qty === 0
-                ? `<button class="add-btn" id="${escapeHtml(item.id)}">ADD</button>`
-                : `<div class="quantity-control">
-                        <button class="qty-btn reduce">-</button>
-                        <span class="item_qty">${escapeHtml(item.qty)}</span>
-                        <button class="qty-btn increase">+</button>
-                    </div>`;
-            return `
-                <div class="menu-item" id="${escapeHtml(item.id)}" available="${escapeHtml(item.item_qty)}">
+        // const items = Object.values(mergedd);
+
+        const items = Object.values(mergedd);
+
+        let html = "";
+
+        for (let i = 0; i < items.length; i += 2) {
+            const item1 = items[i];
+            const item2 = items[i + 1];
+
+            const createItem = (item) => {
+                const controls = item.qty === 0
+                    ? `<button class="add-btn" id="${escapeHtml(item.id)}">ADD</button>`
+                    : `<div class="quantity-control">
+                    <button class="qty-btn reduce">-</button>
+                    <span class="item_qty">${escapeHtml(item.qty)}</span>
+                    <button class="qty-btn increase">+</button>
+               </div>`;
+
+                return `
+            <div class="menu-item"
+                 id="${escapeHtml(item.id)}"
+                 available="${escapeHtml(item.item_qty)}">
+
+                <div class="item-img-wrapper">
+                    <img src="${escapeHtml(item.file_url)}" alt="Burger">
+                    </div>
+                    
                     <div class="item-details">
-                        <h3>${escapeHtml(item.name)}</h3>
-                        <p class="price">${escapeHtml(item.price)}</p>
+                    <div style="display:flex; justify-content:space-between;">
+                    <h3>${escapeHtml(item.name)}</h3>
+                    <p class="price">${escapeHtml(item.price)}</p>
                     </div>
-                    <div class="item-img-wrapper">
-                        <img src="${escapeHtml(item.file_url)}" alt="Burger">
-                        ${controls}
-                        <p class="customisable">Customisable</p>
-                    </div>
+                    ${controls}
                 </div>
-                <hr class="item-divider">
-            `;
-        }).join("");
+
+            </div>
+        `;
+            };
+
+            html += `
+        <div class="menu-row">
+            ${createItem(item1)}
+            ${item2 ? createItem(item2) : ""}
+        </div>
+    `;
+        }
+
         menu_items_container.innerHTML = html; // bugfix: was `+=` against existing (empty) content, kept for clarity/perf
     }
 

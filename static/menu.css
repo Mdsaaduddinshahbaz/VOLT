@@ -1,32 +1,36 @@
 /* ============================================================
    MENU.CSS — "Order Ticket" system
    A fast-food menu styled like a kitchen order ticket / receipt:
-   punchy condensed headlines, mono price tags, and a perforated
+   punchy display headlines, mono price tags, and a perforated
    tear-line motif that shows up between the image and details
    of every dish, and between menu rows.
+   Re-themed to match VOLT Partner: dark ink surface, signal-
+   orange accent, amber secondary highlight, mint-green success.
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Anton&family=DM+Sans:ital,wght@0,400;0,500;0,700;1,400&family=JetBrains+Mono:wght@500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@500;600;700&display=swap');
 
 :root {
-    --bg: #FFF8EF;         /* warm paper */
-    --ink: #241C1A;        /* near-black charcoal */
-    --ink-soft: #6b5f58;   /* muted charcoal for secondary text */
-    --flame: #E8491D;      /* primary brand accent */
-    --flame-dark: #C23A15;
-    --mustard: #F5A81C;    /* secondary accent */
-    --maroon: #6E1B12;     /* deep accent, nav/hero */
-    --card: #FFF1DE;       /* menu item card bg */
-    --card-hover: #FFE6C7;
-    --line: #E7D8C3;       /* hairline / divider tan */
-    --white: #FFFDF9;
+    --bg: #14171C;         /* ink surface */
+    --ink: #F5F3EC;        /* primary text (paper) */
+    --ink-soft: #98A2B3;   /* muted text (slate) */
+    --flame: #FF5D2E;      /* primary brand accent */
+    --flame-dark: #D9491F;
+    --mustard: #FFC53D;    /* secondary accent (amber) */
+    --maroon: #1B2027;     /* deep surface, nav/hero */
+    --card: #1B2027;       /* menu item card bg */
+    --card-hover: #262E3A;
+    --line: #2B323C;       /* hairline / divider */
+    --white: #20272F;      /* elevated panel surface */
+    --green: #3ED598;      /* success / confirm */
+    --danger: #FF5470;     /* error / invalid state */
 
-    --font-display: 'Anton', sans-serif;
-    --font-body: 'DM Sans', sans-serif;
+    --font-display: 'Space Grotesk', sans-serif;
+    --font-body: 'Inter', sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
 
     --radius: 14px;
-    --shadow-card: 0 2px 0 var(--line), 0 10px 24px -18px rgba(36, 28, 26, 0.45);
+    --shadow-card: 0 2px 0 var(--line), 0 12px 26px -18px rgba(0, 0, 0, 0.55);
 }
 
 * { box-sizing: border-box; }
@@ -95,7 +99,7 @@ body {
     display: flex;
     align-items: center;
     gap: 8px;
-    color: var(--white);
+    color: var(--ink);
     font-weight: 700;
     font-size: 13px;
     letter-spacing: 0.04em;
@@ -107,7 +111,7 @@ body {
 }
 
 .right-nav ul li:hover {
-    background: rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.1);
     transform: translateY(-1px);
 }
 
@@ -130,7 +134,7 @@ body {
 
 #orderBtn i,
 #cartBtn i {
-    color: var(--white);
+    color: var(--ink);
 }
 
 /* Search */
@@ -175,6 +179,9 @@ body {
     min-height: 60vh;
 }
 
+/* Note: if #loading is a static image asset rather than drawn
+   with CSS, it may still carry the old cream/mustard palette —
+   swap the file, or ask and I can rebuild it as a CSS spinner. */
 #loading {
     display: block;
     width: 46px;
@@ -218,10 +225,10 @@ body {
 
 .res-info h1 {
     font-family: var(--font-display);
-    font-weight: 400;
+    font-weight: 700;
     font-size: clamp(34px, 6vw, 52px);
-    line-height: 0.95;
-    letter-spacing: 0.01em;
+    line-height: 0.98;
+    letter-spacing: -0.01em;
     margin: 0 0 8px;
     color: var(--ink);
     text-transform: uppercase;
@@ -370,19 +377,21 @@ hr.divider::after { right: -20px; }
 #ReplaceContainer{
     display: none !important;
     width: 60%;
-    background: #fff8ef;
+    background: var(--white);
     border-radius: 17px;
         position: absolute;
     top: 250px;
     justify-self: center;
-    border: 2px solid black;
+    border: 1.5px solid var(--line);
+    box-shadow: var(--shadow-card);
     /* padding: 33px 73px; */
     width: 100%;
     display: flex;
     justify-content: center;
     /* align-self: center; */
     flex-direction: column;
-    padding: 11px
+    padding: 11px;
+    color: var(--ink);
 }
 #ReplaceContainer.show{
     display: block !important;
@@ -400,17 +409,20 @@ hr.divider::after { right: -20px; }
 #controlBtn button{
         border-radius: 6px;
     width: 121px;
-    color: white;
-    background: green;
+    color: var(--bg);
+    background: var(--green);
+    font-weight: 700;
     border: none;
     min-width: max-content;
+    padding: 8px 0;
+    cursor: pointer;
 
 }
 .overlay {
     display: none;
     position: fixed;
     inset: 0;
-    background: rgba(36, 28, 26, 0.5);
+    background: rgba(6, 7, 9, 0.6);
     z-index: 45;
 }
 
@@ -446,10 +458,10 @@ hr.divider::after { right: -20px; }
     width: 0 !important;
     overflow: hidden;
 
-    border: 2px solid black;
+    border: 2px solid var(--line);
     padding: 10px;
     border-radius: 13px;
-    color: white;
+    color: var(--ink);
     background: var(--maroon);
 
     transition: width 0.4s ease;
@@ -494,7 +506,7 @@ footer.show {
 }
 
 .add-btn:hover {
-    background: #FFF3EC;
+    background: var(--card-hover);
 }
 
 .add-btn:active {
@@ -527,7 +539,7 @@ footer.show {
     border: none;
     border-radius: 6px;
     background: rgba(255, 255, 255, 0.18);
-    color: var(--white);
+    color: var(--ink);
     font-size: 16px;
     font-weight: 700;
     line-height: 1;
@@ -542,7 +554,7 @@ footer.show {
 .qty-btn:active { transform: scale(0.94); }
 
 .item_qty {
-    color: var(--white);
+    color: var(--ink);
     font-family: var(--font-mono);
     font-weight: 700;
     font-size: 14px;
@@ -614,7 +626,7 @@ hr.item-divider {
     }
     #hideCartOrderBtn{
         display: block;
-        color: white;
+        color: var(--ink);
         margin: 0;
     }
 }
@@ -624,7 +636,7 @@ hr.item-divider {
     }
 }
 #NO{
-    background: red !important;
+    background: var(--danger) !important;
 }
 @media (max-width:300px) {
     #controlBtn{
@@ -632,4 +644,198 @@ hr.item-divider {
     justify-content: space-between;
     }
 
+}
+
+
+
+ /* ============================================================
+   TWO-COLUMN MENU CARD LAYOUT
+   ============================================================ */
+
+.menu-section {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.menu-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 15px;
+}
+
+/* ============================================================
+   MENU ITEM CARD
+   ============================================================ */
+
+.menu-item {
+    display: flex;
+    flex-direction: column;
+
+    width: 100%;
+    min-width: 0;
+
+    padding: 0;
+    margin: 0;
+
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    overflow: hidden;
+
+    background: var(--card);
+    box-shadow: var(--shadow-card);
+
+    animation: rise 0.35s ease both;
+}
+
+/* ============================================================
+   IMAGE
+   ============================================================ */
+
+.item-img-wrapper {
+    position: relative;
+
+    width: 100%;
+    height: 160px;
+
+    padding: 0;
+    border: none;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.item-img-wrapper img {
+    display: block;
+
+    width: 100%;
+    height: 160px;
+
+    object-fit: cover;
+
+    border: none;
+    border-radius: 0;
+
+    box-shadow: none;
+}
+
+/* ============================================================
+   ITEM DETAILS
+   ============================================================ */
+
+.item-details {
+    width: 100%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 12px;
+}
+
+.item-details h3 {
+    margin: 0 0 9px;
+    width: 70%;
+    word-wrap:anywhere;
+    font-family: var(--font-body);
+    font-weight: 700;
+    font-size: 15px;
+    line-height: 1.25;
+
+    color: var(--ink);
+}
+
+/* ============================================================
+   PRICE
+   ============================================================ */
+
+.item-details .price {
+    margin: 0;
+
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 14px;
+
+    color: #ffc53c;
+
+    padding: 0;
+    background: none;
+    border-radius: 0;
+}
+.add-btn{
+    margin-top: 10px;
+    width: 100%;
+}
+.item-details .price::before {
+    content: '\20B9 ';
+}
+
+/* ============================================================
+   ADD BUTTON
+   ============================================================ */
+
+.item-img-wrapper .add-btn {
+    width: auto;
+    min-width: 65px;
+
+    margin: 0;
+
+    padding: 6px 12px;
+
+    background: var(--white);
+    color: var(--flame);
+
+    border: 1.5px solid var(--flame);
+    border-radius: 7px;
+
+    box-shadow: 0 2px 0 var(--flame);
+
+    font-size: 12px;
+}
+
+/* ============================================================
+   QUANTITY CONTROL
+   ============================================================ */
+
+.item-img-wrapper .quantity-control {
+    width: auto;
+    min-width: 80px;
+
+    margin: 0;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    background: var(--flame);
+    border-radius: 7px;
+
+    padding: 4px;
+}
+
+/* ============================================================
+   CUSTOMISABLE
+   ============================================================ */
+
+.item-img-wrapper .customisable {
+    margin: 0;
+
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+
+    color: var(--ink-soft);
+    font-weight: 700;
+}
+
+/* ============================================================
+   DIVIDER
+   ============================================================ */
+
+hr.item-divider {
+    display: none;
+}
+
+/* Empty second column when item count is odd */
+.menu-item.empty {
+    visibility: hidden;
 }

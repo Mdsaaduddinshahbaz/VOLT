@@ -3,34 +3,36 @@
    Past orders are literal ticket stubs: a torn top edge, a
    token number stamped in mono type, and a status badge that
    reads like a kitchen-order stamp.
+   Re-themed to match VOLT Partner: dark ink surface, signal-
+   orange accent, amber secondary highlight, mint-green success.
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Anton&family=DM+Sans:ital,wght@0,400;0,500;0,700;1,400&family=JetBrains+Mono:wght@500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@500;600;700&display=swap');
 
 :root {
-    --bg: #FFF8EF;
-    --ink: #241C1A;
-    --ink-soft: #6b5f58;
-    --flame: #E8491D;
-    --flame-dark: #C23A15;
-    --mustard: #F5A81C;
-    --maroon: #6E1B12;
-    --card: #FFF1DE;
-    --card-hover: #FFE6C7;
-    --line: #E7D8C3;
-    --white: #FFFDF9;
-    --green: #1F8A4C;
-    --green-bg: #E5F4EA;
-    --red: #C23A15;
-    --red-bg: #FBE7E1;
-    --amber-bg: #FFF0D6;
+    --bg: #14171C;
+    --ink: #F5F3EC;
+    --ink-soft: #98A2B3;
+    --flame: #FF5D2E;
+    --flame-dark: #D9491F;
+    --mustard: #FFC53D;
+    --maroon: #1B2027;
+    --card: #1B2027;
+    --card-hover: #262E3A;
+    --line: #2B323C;
+    --white: #20272F;
+    --green: #3ED598;
+    --green-bg: #123328;
+    --red: #FF5470;
+    --red-bg: #3A1620;
+    --amber-bg: #3D2B0A;
 
-    --font-display: 'Anton', sans-serif;
-    --font-body: 'DM Sans', sans-serif;
+    --font-display: 'Space Grotesk', sans-serif;
+    --font-body: 'Inter', sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
 
     --radius: 14px;
-    --shadow-card: 0 2px 0 var(--line), 0 10px 24px -18px rgba(36, 28, 26, 0.45);
+    --shadow-card: 0 2px 0 var(--line), 0 12px 26px -18px rgba(0, 0, 0, 0.55);
 }
 
 * { box-sizing: border-box; }
@@ -74,7 +76,7 @@ body {
 
 .header h1 {
     font-family: var(--font-display);
-    font-weight: 400;
+    font-weight: 700;
     text-transform: uppercase;
     font-size: clamp(28px, 5vw, 38px);
     letter-spacing: 0.01em;
@@ -89,7 +91,7 @@ body {
     font-weight: 700;
     font-size: 13px;
     color: var(--ink);
-    background: var(--card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23241C1A'/%3E%3C/svg%3E") no-repeat right 14px center;
+    background: var(--card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2398A2B3'/%3E%3C/svg%3E") no-repeat right 14px center;
     border: 1px solid var(--line);
     border-radius: 999px;
     padding: 10px 34px 10px 16px;
@@ -128,16 +130,22 @@ body {
 .empty-state .icon {
     font-size: 56px;
     margin-bottom: 6px;
+    color: var(--flame);
     filter: drop-shadow(0 6px 0 var(--line));
 }
+/* Live-tracking map overlay. If this embeds map tiles (Leaflet/
+   Google), the raw tile imagery won't recolor itself — the filter
+   below nudges standard road-map tiles toward the dark palette.
+   Drop it if you're using a map provider with a built-in dark style. */
 #map{
     position: absolute;
     z-index: 435;
     left: 0;
     width: 100%;
-    background: white;
+    background: var(--white);
     height: 100%;
-    border: 2px solid black;
+    border: 2px solid var(--line);
+    filter: grayscale(0.3) invert(0.92) contrast(0.9) brightness(0.95) hue-rotate(180deg);
 }
 #map-block{
     display: none;
@@ -145,7 +153,7 @@ body {
     position: absolute;
     height: 100%;
     z-index: 12222222;
-    background: white;
+    background: var(--white);
     height: 100%;
     left: 0;
     width: 100%;
@@ -158,12 +166,12 @@ body {
         display: flex;
     align-items: center;
     gap: 18px;
-    background-color:#6E1B12 !important;
-    color: white;
+    background-color: var(--maroon) !important;
+    color: var(--ink);
 }
 .empty-state h1 {
     font-family: var(--font-display);
-    font-weight: 400;
+    font-weight: 700;
     text-transform: uppercase;
     font-size: 28px;
     letter-spacing: 0.01em;
@@ -179,7 +187,7 @@ body {
 
 .empty-state .btn {
     background: var(--flame);
-    color: var(--white);
+    color: var(--ink);
     border: none;
     font-family: var(--font-body);
     font-weight: 700;
@@ -270,7 +278,7 @@ body {
 
 .order-status.status-placed {
     background: var(--amber-bg);
-    color: #915A00;
+    color: var(--mustard);
 }
 
 .order-status.status-completed {
@@ -303,7 +311,7 @@ body {
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: var(--flame-dark);
+    color: var(--flame);
     margin: 10px 0 6px;
 }
 
@@ -361,7 +369,7 @@ button.cancelBtn {
 
 .cancelBtn:hover {
     background: var(--red) !important;
-    color: var(--white) !important;
+    color: var(--ink) !important;
 }
 
 .cancelBtn:disabled {
@@ -445,7 +453,7 @@ button.cancelBtn {
     overflow: hidden;
     transition: max-width 0.28s ease, padding 0.28s ease;
     border-radius: 999px;
-    color: white;
+    color: var(--ink);
     font-family: fantasy;
 }
 .fa-cart-shopping:before, .fa-shopping-cart:before {
@@ -465,7 +473,7 @@ button.cancelBtn {
 
 #homeBtn i,
 #cartBtn i {
-    color: var(--white);
+    color: var(--ink);
 }
 @media (max-width: 503px) {
     .right-nav ul{
@@ -484,7 +492,7 @@ button.cancelBtn {
     }
     #hideCartOrderBtn{
         display: block;
-        color: white;
+        color: var(--ink);
         margin: 0;
         position: fixed;
         top: 6px;

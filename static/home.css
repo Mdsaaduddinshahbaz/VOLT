@@ -1,33 +1,35 @@
 /* ============================================================
    HOME.CSS — "Order Ticket" system, discovery chapter
-   Same paper-ticket language as menu.css / cart.css. The
-   restaurant grid reads like a stack of menu cards; the location
-   picker is a ticket-counter panel you fill out before ordering.
+   Re-themed to match VOLT Partner: dark ink surface, signal-
+   orange accent, amber secondary highlight, mint-green success.
+   Same paper-ticket language as before (dashed seams, tag chips)
+   — just carried into VOLT's palette and type system so the
+   customer app and the rider app read as one product family.
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Anton&family=DM+Sans:ital,wght@0,400;0,500;0,700;1,400&family=JetBrains+Mono:wght@500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@500;600;700&display=swap');
 
 :root {
-    --bg: #FFF8EF;
-    --ink: #241C1A;
-    --ink-soft: #6b5f58;
-    --flame: #E8491D;
-    --flame-dark: #C23A15;
-    --mustard: #F5A81C;
-    --maroon: #6E1B12;
-    --card: #FFF1DE;
-    --card-hover: #FFE6C7;
-    --line: #E7D8C3;
-    --white: #FFFDF9;
-    --green: #1F8A4C;
+    --bg: #14171C;
+    --ink: #F5F3EC;
+    --ink-soft: #98A2B3;
+    --flame: #FF5D2E;
+    --flame-dark: #D9491F;
+    --mustard: #FFC53D;
+    --maroon: #1B2027;
+    --card: #1B2027;
+    --card-hover: #262E3A;
+    --line: #2B323C;
+    --white: #20272F;
+    --green: #3ED598;
 
-    --font-display: 'Anton', sans-serif;
-    --font-body: 'DM Sans', sans-serif;
+    --font-display: 'Space Grotesk', sans-serif;
+    --font-body: 'Inter', sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
 
     --radius: 14px;
-    --shadow-card: 0 2px 0 var(--line), 0 10px 24px -18px rgba(36, 28, 26, 0.45);
-    --shadow-panel: 0 18px 44px -18px rgba(36, 28, 26, 0.5);
+    --shadow-card: 0 1px 0 var(--line), 0 16px 32px -22px rgba(0, 0, 0, 0.6);
+    --shadow-panel: 0 26px 60px -22px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--line);
 }
 
 * {
@@ -97,14 +99,25 @@ body {
     width: 100%;
     border-radius: 22px;
     margin-top: 17px;
-    border: 2px solid #e7991a;
-    padding: 12px;
+    border: 1.5px solid var(--line);
+    padding: 12px 16px;
+    background: var(--card);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 14px;
+    outline: none;
+    transition: border-color .15s ease;
+}
+
+#searchInput:focus{
+    border-color: var(--flame);
 }
 
 #searchInput::placeholder{
     font-size: larger;
     font-weight: 600;
     align-self: center;
+    color: var(--ink-soft);
 }
 /* Location trigger pill */
 
@@ -113,16 +126,16 @@ body {
     align-items: center;
     gap: 8px;
     cursor: pointer;
-    color: var(--white);
+    color: var(--ink);
     padding: 7px 12px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.06);
     max-width: 260px;
     transition: background 0.15s ease;
 }
 
 .location-trigger:hover {
-    background: rgba(255, 255, 255, 0.16);
+    background: rgba(255, 255, 255, 0.12);
 }
 
 .location-trigger i:first-child {
@@ -141,7 +154,7 @@ body {
 
 .location-trigger i:last-child {
     font-size: 10px;
-    color: rgba(255, 255, 255, 0.7);
+    color: rgba(245, 243, 236, 0.6);
     flex-shrink: 0;
 }
 
@@ -151,7 +164,7 @@ body {
     display: none;
     position: fixed;
     inset: 0;
-    background: rgba(36, 28, 26, 0.5);
+    background: rgba(6, 7, 9, 0.6);
     z-index: 45;
 }
 
@@ -216,7 +229,7 @@ body {
 
     #hideCartOrderBtn {
         display: block;
-        color: white;
+        color: var(--ink);
         margin: 0;
     }
 }
@@ -395,7 +408,7 @@ body {
     width: 100%;
     background: var(--card);
     border: 1px dashed var(--flame);
-    color: var(--flame-dark);
+    color: var(--flame);
     font-family: var(--font-body);
     font-weight: 700;
     font-size: 13.5px;
@@ -420,6 +433,7 @@ body {
 
 #map {
     border: 1px solid var(--line);
+    filter: grayscale(0.3) invert(0.92) contrast(0.9) brightness(0.95) hue-rotate(180deg);
 }
 
 /* Fetching-location inline loader inside the panel-adjacent area */
@@ -468,7 +482,7 @@ body {
     z-index: 80;
     align-items: center;
     justify-content: center;
-    background: rgba(36, 28, 26, 0.55);
+    background: rgba(6, 7, 9, 0.65);
     padding: 20px;
 }
 
@@ -489,6 +503,7 @@ body {
     margin: 0 0 18px;
     font-size: 17px;
     font-weight: 700;
+    font-family: var(--font-display);
 }
 
 .tag-options {
@@ -506,6 +521,7 @@ body {
     font-family: var(--font-body);
     font-weight: 700;
     font-size: 13px;
+    color: var(--ink);
     cursor: pointer;
     transition: background 0.12s ease, border-color 0.12s ease, transform 0.12s ease;
 }
@@ -555,7 +571,7 @@ body {
     flex: 1;
     padding: 10px 0;
     background:transparent;
-    color:var(--white);
+    color:var(--ink);
     border:none;
         display: flex;
     flex-direction: column;
@@ -563,46 +579,26 @@ body {
     align-items: center;
 }
 
-/* .active-indicator{
-        content: "";
-    position: absolute;
-    width: 128px;
-    height: 61px;
-    top: 1px;
-    background: url(/static/active-tab.svg) center / 100% 100% no-repeat;
-    mask: none;
-    z-index: -1;
-    -webkit-mask: none;
-    transition:
-        transform .35s cubic-bezier(.22,1,.36,1),
-        left .35s cubic-bezier(.22,1,.36,1);
-} */
-    /* .nav-btn.active .active-indicator{
-        transform: translateX(calc(var(--active-index) * 100%));
-    } */
+/* Signature indicator: a plain CSS pill instead of the old baked-in
+   /static/active-tab.svg — that asset has its highlight color drawn
+   into the image itself, so it can't be recolored from CSS. This
+   keeps the sliding-highlight behavior without depending on an
+   asset that would still show the old mustard/cream art. */
 .active-indicator{
     position: absolute;
     top: 0;
-    width: 137px;              /* width of your SVG */
-    height: 61px;
-    background: url("/static/active-tab.svg") center/100% 100% no-repeat;
+    width: 100%;
+    height: 100%;
+    max-width: 137px;
+    border-radius: 14px;
+    background: linear-gradient(180deg, rgba(255,93,46,.22), rgba(255,93,46,.08));
+    border: 1px solid rgba(255,93,46,.4);
     pointer-events: none;
     transition: transform .35s cubic-bezier(.22,1,.36,1);
 }
 .nav-btn.active{
-    color:#f5a81c;
+    color: var(--flame);
 }
-/* .nav-btn.active::before {
-    content: "";
-    position: absolute;
-    width: 137px;
-    height: 61px;
-    top: 1px;
-    background: url(/static/active-tab.svg) center / 100% 100% no-repeat;
-    mask: none;
-    z-index: -1;
-    -webkit-mask: none;
-} */
 .search-container {
     /* max-width: 0; */
     width: 100%;
@@ -646,7 +642,7 @@ body {
     display: flex;
     align-items: center;
     gap: 8px;
-    color: var(--white);
+    color: var(--ink);
     font-weight: 700;
     font-size: 13px;
     letter-spacing: 0.03em;
@@ -659,7 +655,7 @@ body {
 }
 
 .right-nav ul li:hover {
-    background: rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.1);
     transform: translateY(-1px);
 }
 
@@ -680,7 +676,7 @@ body {
 
 #orderBtn i,
 #cartBtn i {
-    color: var(--white);
+    color: var(--ink);
 }
 
 /* ============================================================
@@ -707,10 +703,10 @@ body {
 
 .filters h2 {
     font-family: var(--font-display);
-    font-weight: 400;
+    font-weight: 700;
     text-transform: uppercase;
     font-size: clamp(19px, 2.6vw, 25px);
-    letter-spacing: 0.005em;
+    letter-spacing: 0.01em;
     margin: 0;
     color: var(--ink);
     max-width: 640px;
@@ -723,14 +719,17 @@ body {
     font-weight: 700;
     font-size: 13px;
     color: var(--ink);
-    background: var(--card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23241C1A'/%3E%3C/svg%3E") no-repeat right 13px center;
+    background: var(--card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2398A2B3'/%3E%3C/svg%3E") no-repeat right 13px center;
     border: 1px solid var(--line);
     border-radius: 999px;
     padding: 9px 32px 9px 16px;
     cursor: pointer;
 }
 
-/* Big loading spinner while fetching restaurants */
+/* Big loading spinner while fetching restaurants.
+   Note: if this is a static image asset, it may still carry the old
+   palette baked in — swap the file if it looks off against the new
+   dark background, or ask and I can rebuild it as a CSS-only spinner. */
 
 img#loading {
     display: block;
@@ -751,6 +750,7 @@ img#loading {
 }
 
 .card {
+    position: relative;
     background: var(--white);
     border: 1px solid var(--line);
     border-radius: var(--radius);
@@ -762,8 +762,26 @@ img#loading {
 
 .card:hover {
     transform: translateY(-4px);
-    box-shadow: 0 4px 0 var(--line), 0 18px 30px -16px rgba(36, 28, 26, 0.5);
+    box-shadow: 0 4px 0 var(--line), 0 20px 34px -18px rgba(0, 0, 0, 0.65);
 }
+
+/* Ticket-tear signature, carried over from the VOLT Partner app:
+   two notches punched at the seam between the photo and the details,
+   sitting right on top of the dashed line below. Colored to match
+   the page background so they read as a bite taken out of the card. */
+.card::before,
+.card::after {
+    content: '';
+    position: absolute;
+    top: 141px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--bg);
+    z-index: 3;
+}
+.card::before { left: -9px; }
+.card::after { right: -9px; }
 
 .card-img {
     position: relative;
@@ -782,8 +800,8 @@ img#loading {
     position: absolute;
     left: 10px;
     bottom: 10px;
-    background: var(--mustard);
-    color: var(--maroon);
+    background: var(--flame);
+    color: var(--bg);
     font-family: var(--font-mono);
     font-weight: 700;
     font-size: 11.5px;
@@ -810,6 +828,7 @@ img#loading {
     margin: 8px 0 6px;
     font-size: 16.5px;
     font-weight: 700;
+    font-family: var(--font-display);
     color: var(--ink);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -824,6 +843,7 @@ img#loading {
     font-size: 13px;
     font-weight: 700;
     color: var(--ink);
+    font-family: var(--font-mono);
 }
 
 .card-details .rating i {
@@ -874,7 +894,7 @@ img#loading {
 
 #no-results-container h2 {
     font-family: var(--font-display) !important;
-    font-weight: 400 !important;
+    font-weight: 700 !important;
     text-transform: uppercase;
     letter-spacing: 0.01em;
     color: var(--ink) !important;
@@ -888,8 +908,9 @@ img#loading {
 
 #no-results-container button {
     background: var(--flame) !important;
-    color: var(--white) !important;
+    color: var(--bg) !important;
     font-family: var(--font-body) !important;
+    font-weight: 700 !important;
     letter-spacing: 0.03em;
     box-shadow: 0 3px 0 var(--flame-dark);
     transition: transform 0.12s ease, box-shadow 0.12s ease;
@@ -921,27 +942,30 @@ img#loading {
 .access_container .icon {
     font-size: 54px;
     margin-bottom: 8px;
+    color: var(--flame);
     filter: drop-shadow(0 6px 0 var(--line));
 }
 
 .access_container h1 {
     font-family: var(--font-display);
-    font-weight: 400;
+    font-weight: 700;
     text-transform: uppercase;
     font-size: 28px;
     letter-spacing: 0.01em;
     margin: 4px 0 12px;
     max-width: 420px;
+    color: var(--ink);
 }
 
 .access_container p {
     max-width: 380px;
     font-size: 14px !important;
+    color: var(--ink-soft);
 }
 
 .access_container button {
     background: var(--flame);
-    color: var(--white);
+    color: var(--bg);
     border: none;
     font-family: var(--font-body);
     font-weight: 700;
@@ -960,7 +984,7 @@ img#loading {
 }
 footer{
         background: var(--bg);
-    border: 2px solid;
+    border: 2px solid var(--line);
     position: sticky;
     bottom: 17px;
     border-radius: 79px;
@@ -1044,6 +1068,11 @@ footer{
 
     .card-img {
         height: 120px;
+    }
+
+    .card::before,
+    .card::after {
+        top: 111px;
     }
 
     .location-box {

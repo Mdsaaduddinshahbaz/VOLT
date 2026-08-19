@@ -96,7 +96,8 @@ def list_resturant_items(resturant_id,types):
                 }
         return ({"item_name":item_name,"categories":cat})
     else:
-        res=resturants_items.find({"resturant_id":resturant_id})
+        # res=resturants_items.find({"resturant_id":resturant_id})
+        res=resturants_items.find({})
         item_name={}
         for r in res:
             if((int(r["item_qty"])-int(r["sold"]))>0):
