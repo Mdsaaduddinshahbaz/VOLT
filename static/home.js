@@ -1,3 +1,822 @@
+let pendingCartItem = null;
+
+document.addEventListener("DOMContentLoaded", async () => {
+    const path = window.location.pathname;
+
+    // Path shape:
+    // /menu/:res_name/:address/:res_id/:userId
+    const userId = path.split("/")[5];
+    const res_id = path.split("/")[4];
+    const addresss = path.split("/")[3];
+    const res_name = path.split("/")[2];
+
+    const decoded = decodeURIComponent(res_name);
+    const addresss_decoded = decodeURIComponent(addresss);
+
+    const menu_items_container = document.getElementById("menu_container");
+    const cartBtn = document.getElementById("cartBtn");
+    const orderBtn = document.getElementById("orderBtn");
+    const res_info = document.querySelector(".res-info");
+    const heading = res_info?.querySelector("h1");
+    const res_location = res_info?.querySelector(".res-location");
+    const breadcrump = document.querySelector(".breadcrumbs");
+    const loading = document.getElementById("loading");
+    const menu_container = document.querySelector(".menu-section");
+    const current_total_amount = document.getElementById("amount");
+    const footer = document.getElementsByTagName("footer")[0];
+    const gotoCartBtn = document.getElementById("GoCartBtn");
+    const message = document.getElementById("message");
+    const ReplaceContainer = document.getElementById("ReplaceContainer");
+    const overlayContainer = document.getElementById("overlayContainer");
+
+    if (breadcrump) {
+        breadcrump.innerText =
+            `Home / ${addresss_decoded} / ${decoded}`;
+    }
+
+    if (res_location) {
+        res_location.innerText = addresss_decoded;
+    }
+
+    if (heading) {
+        heading.innerText = decoded;
+    }
+
+    // ============================================================
+    // LOAD CART
+    // ============================================================
+
+    const rest = await fetch("/get_cart_items", {
+        method: "POST",
+        headers: {
+            "Content-type": "application/json"
+        },
+        body: JSON.stringify({
+            userid: userId
+        })
+    });
+
+    if (rest.status === 401) {
+        alert("Unauthorized user. Please log in");
+        window.location.href = "/login/user";
+        return;
+    }
+
+    if (!rest.ok) {
+        alert("Error loading cart");
+        return;
+    }
+
+    const datas = await rest.json();
+    console.log(datas);
+    
+    if (
+        datas.results !== null &&
+        datas.results.total > 0
+    ) {
+        footer.classList.add("show");
+        current_total_amount.innerText = datas.results.total;
+    }
+
+    // ============================================================
+    // LOAD MENU
+    // ============================================================
+
+    const res = await fetch("/list_items", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            res_id: res_id,
+            type: "user"
+        })
+    });
+
+    if (res.status === 401) {
+        alert("Unauthorized user. Please log in");
+        window.location.href = "/login/user";
+        return;
+    }
+
+    if (!res.ok) {
+        alert("Error loading menu");
+        return;
+    }
+
+    const data = await res.json();
+
+    if (!data.success) {
+        return;
+    }
+
+    const mergedd = mergeMenuWithCart(data, datas);
+
+    loading.style.display = "none";
+
+    // ============================================================
+    // MASTER ITEM LIST
+    //
+    // This never changes.
+    // Search filters this array and rebuilds the grid.
+    // ============================================================
+
+    const items = Object.values(mergedd);
+
+    // ============================================================
+    // CREATE INDIVIDUAL ITEM
+    // ============================================================
+
+    function createItem(item) {
+
+        const controls = item.qty === 0
+            ? `
+                <button
+                    class="add-btn"
+                    id="${escapeHtml(item.id)}">
+                    ADD
+                </button>
+            `
+            : `
+                <div class="quantity-control">
+                    <button class="qty-btn reduce">-</button>
+
+                    <span class="item_qty">
+                        ${escapeHtml(item.qty)}
+                    </span>
+
+                    <button class="qty-btn increase">+</button>
+                </div>
+            `;
+
+        return `
+            <div
+                class="menu-item"
+                id="${escapeHtml(item.id)}"
+                available="${escapeHtml(item.item_qty)}"
+            >
+
+                <div class="item-img-wrapper">
+                    <img
+                        src="${escapeHtml(item.file_url)}"
+                        alt="${escapeHtml(item.name)}"
+                    >
+                </div>
+
+                <div class="item-details">
+
+                    <div
+                        style="
+                            display:flex;
+                            justify-content:space-between;
+                            align-items:center;
+                            gap:8px;
+                        "
+                    >
+                        <h3>
+                            ${escapeHtml(item.name)}
+                        </h3>
+
+                        <p class="price">
+                            ${escapeHtml(item.price)}
+                        </p>
+                    </div>
+
+                    ${controls}
+
+                </div>
+
+            </div>
+        `;
+    }
+
+    // ============================================================
+    // RENDER MENU
+    //
+    // Always creates 2 columns.
+    // If there is only one item left, it stays on the left.
+    // ============================================================
+
+    function renderMenu(itemsToRender) {
+
+        let html = "";
+
+        for (let i = 0; i < itemsToRender.length; i += 2) {
+
+            const item1 = itemsToRender[i];
+            const item2 = itemsToRender[i + 1];
+
+            html += `
+                <div class="menu-row">
+
+                    ${createItem(item1)}
+
+                    ${
+                        item2
+                            ? createItem(item2)
+                            : ""
+                    }
+
+                </div>
+            `;
+        }
+
+        menu_items_container.innerHTML = html;
+    }
+
+    // Initial menu render
+    renderMenu(items);
+
+    // ============================================================
+    // CART / ORDER BUTTONS
+    // ============================================================
+
+    if (cartBtn) {
+        cartBtn.addEventListener("click", () => {
+            window.location.href = `/cart/${userId}`;
+        });
+    }
+
+    if (orderBtn) {
+        orderBtn.addEventListener("click", () => {
+            window.location.href = `/orders/${userId}`;
+        });
+    }
+
+    // ============================================================
+    // ADD TO CART
+    // ============================================================
+
+    menu_items_container.addEventListener("click", async (e) => {
+
+        if (!e.target.classList.contains("add-btn")) {
+            return;
+        }
+
+        const item = e.target.closest(".menu-item");
+
+        if (!item) {
+            return;
+        }
+
+        const names = item.querySelector("h3").innerText;
+        const price = item.querySelector(".price").innerText;
+        const item_id = item.getAttribute("id");
+
+        const available = parseInt(
+            item.getAttribute("available")
+        );
+
+        const button = item.querySelector(".add-btn");
+
+        // Out of stock
+        if (
+            !Number.isNaN(available) &&
+            available <= 0
+        ) {
+            alert("This item is currently out of stock");
+            return;
+        }
+
+        try {
+
+            const res = await fetch("/add_to_cart", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    resid: res_id,
+                    userid: userId,
+                    item: names,
+                    ress_name: decoded,
+                    qty: 1,
+                    item_id: item_id,
+                    price: parseInt(price),
+                    replace: false
+                })
+            });
+            const data = await res.json();
+            console.log(data);
+            
+            if (res.status === 401) {
+                alert("Unauthorized user. Please log in");
+                window.location.href = "/login/user";
+                return;
+            }
+
+            if (!res.ok) {
+                throw new Error(
+                    `add_to_cart failed: ${res.status}`
+                );
+            }
+
+            // const data = await res.json();
+            // console.log(data);
+            
+            if (data.success) {
+
+                button.outerHTML = `
+                    <div class="quantity-control">
+
+                        <button class="qty-btn reduce">
+                            -
+                        </button>
+
+                        <span class="item_qty">
+                            1
+                        </span>
+
+                        <button class="qty-btn increase">
+                            +
+                        </button>
+
+                    </div>
+                `;
+
+                footer.classList.add("show");
+                current_total_amount.innerText = data.Total;
+
+            } else {
+
+                pendingCartItem = {
+                    resid: res_id,
+                    userid: userId,
+                    item: names,
+                    ress_name: decoded,
+                    qty: 1,
+                    item_id: item_id,
+                    price: parseInt(price)
+                };
+
+                button.innerText = "ADD";
+
+                ReplaceContainer.classList.add("show");
+                overlayContainer.classList.add("show");
+
+                message.innerText =
+                    data.message || "Please try again";
+            }
+
+        } catch (err) {
+
+            console.error(
+                "add_to_cart failed",
+                err
+            );
+
+            alert(
+                "Something went wrong adding this item. Please try again."
+            );
+        }
+    });
+
+    // ============================================================
+    // QUANTITY UPDATE STATE
+    // ============================================================
+
+    const pendingUpdates = new Map();
+    const inFlightControllers = new Map();
+
+    function scheduleCartUpdate(
+        itemId,
+        userId,
+        delta,
+        qtyEl,
+        onSuccess,
+        onFailure
+    ) {
+
+        let entry = pendingUpdates.get(itemId);
+
+        if (entry) {
+
+            entry.accumulatedDelta += delta;
+
+            clearTimeout(entry.timer);
+
+        } else {
+
+            entry = {
+                accumulatedDelta: delta,
+                timer: null
+            };
+
+            pendingUpdates.set(itemId, entry);
+        }
+
+        entry.timer = setTimeout(async () => {
+
+            const netDelta =
+                entry.accumulatedDelta;
+
+            pendingUpdates.delete(itemId);
+
+            if (netDelta === 0) {
+                return;
+            }
+
+            // Cancel older request
+            inFlightControllers
+                .get(itemId)
+                ?.abort();
+
+            const controller =
+                new AbortController();
+
+            inFlightControllers.set(
+                itemId,
+                controller
+            );
+
+            try {
+
+                const res = await fetch(
+                    "/update_cart",
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type":
+                                "application/json"
+                        },
+                        body: JSON.stringify({
+                            user_id: userId,
+                            item_id: itemId,
+                            qty: netDelta
+                        }),
+                        signal:
+                            controller.signal
+                    }
+                );
+
+                if (!res.ok) {
+                    throw new Error(
+                        `update_cart failed: ${res.status}`
+                    );
+                }
+
+                const data =
+                    await res.json();
+
+                if (data.success) {
+
+                    onSuccess(data);
+
+                } else {
+
+                    onFailure(
+                        data.message ||
+                        "Failed updating cart"
+                    );
+                }
+
+            } catch (err) {
+
+                if (
+                    err.name !==
+                    "AbortError"
+                ) {
+
+                    console.error(
+                        "cart update failed",
+                        err
+                    );
+
+                    onFailure(
+                        "Network error"
+                    );
+                }
+
+            } finally {
+
+                if (
+                    inFlightControllers.get(
+                        itemId
+                    ) === controller
+                ) {
+
+                    inFlightControllers.delete(
+                        itemId
+                    );
+                }
+            }
+
+        }, 400);
+    }
+
+    // ============================================================
+    // INCREASE / REDUCE
+    // ============================================================
+
+    menu_container.addEventListener(
+        "click",
+        async (e) => {
+
+            const itemRow =
+                e.target.closest(".menu-item");
+
+            if (!itemRow) {
+                return;
+            }
+
+            const itemId =
+                itemRow.id;
+
+            const availableRaw =
+                itemRow.getAttribute(
+                    "available"
+                );
+
+            const item_qty =
+                availableRaw !== null &&
+                availableRaw !== ""
+                    ? parseInt(availableRaw)
+                    : Infinity;
+
+            // ----------------------------------------------------
+            // INCREASE
+            // ----------------------------------------------------
+
+            if (
+                e.target.classList.contains(
+                    "increase"
+                )
+            ) {
+
+                const qtyEl =
+                    e.target.parentElement
+                        .querySelector(
+                            ".item_qty"
+                        );
+
+                const prevQty =
+                    Number(
+                        qtyEl.textContent
+                    );
+
+                if (
+                    prevQty + 1 >
+                    item_qty
+                ) {
+
+                    alert(
+                        `only ${item_qty} in stock`
+                    );
+
+                    return;
+                }
+
+                // Optimistic update
+                qtyEl.textContent =
+                    prevQty + 1;
+
+                scheduleCartUpdate(
+                    itemId,
+                    userId,
+                    1,
+                    qtyEl,
+
+                    (data) => {
+
+                        if (
+                            data.total > 0
+                        ) {
+
+                            footer.classList.add(
+                                "show"
+                            );
+
+                            current_total_amount.innerText =
+                                data.total;
+
+                        } else {
+
+                            footer.classList.remove(
+                                "show"
+                            );
+                        }
+                    },
+
+                    (msg) => {
+
+                        qtyEl.textContent =
+                            prevQty;
+
+                        alert(msg);
+                    }
+                );
+            }
+
+            // ----------------------------------------------------
+            // REDUCE
+            // ----------------------------------------------------
+
+            else if (
+                e.target.classList.contains(
+                    "reduce"
+                )
+            ) {
+
+                const qtyEl =
+                    e.target.parentElement
+                        .querySelector(
+                            ".item_qty"
+                        );
+
+                const prevQty =
+                    Number(
+                        qtyEl.textContent
+                    );
+
+                // Optimistic update
+                qtyEl.textContent =
+                    Math.max(
+                        0,
+                        prevQty - 1
+                    );
+
+                scheduleCartUpdate(
+                    itemId,
+                    userId,
+                    -1,
+                    qtyEl,
+
+                    (data) => {
+
+                        if (
+                            data.total > 0
+                        ) {
+
+                            footer.classList.add(
+                                "show"
+                            );
+
+                            current_total_amount.innerText =
+                                data.total;
+
+                        } else {
+
+                            footer.classList.remove(
+                                "show"
+                            );
+                        }
+
+                        if (
+                            data.removed
+                        ) {
+
+                            const qtyControl =
+                                e.target.closest(
+                                    ".quantity-control"
+                                );
+
+                            if (qtyControl) {
+
+                                qtyControl.outerHTML = `
+                                    <button
+                                        class="add-btn"
+                                        id="${itemId}">
+                                        ADD
+                                    </button>
+                                `;
+                            }
+                        }
+                    },
+
+                    (msg) => {
+
+                        qtyEl.textContent =
+                            prevQty;
+
+                        alert(msg);
+                    }
+                );
+            }
+        }
+    );
+
+    // ============================================================
+    // SEARCH
+    // ============================================================
+
+    const searchContainer =
+    document.getElementById("searchContainer");
+
+const searchInput =
+    document.getElementById("searchInput");
+
+if (searchContainer && searchInput) {
+
+    let searchTimeout;
+
+    searchInput.addEventListener("input", () => {
+
+        const searchTerm = searchInput.value
+            .trim()
+            .toLowerCase();
+
+        clearTimeout(searchTimeout);
+
+        searchTimeout = setTimeout(() => {
+
+            if (!searchTerm) {
+                renderMenu(items);
+                return;
+            }
+
+            const filteredItems = items.filter(item =>
+                item.name
+                    .toLowerCase()
+                    .includes(searchTerm)
+            );
+
+            renderMenu(filteredItems);
+
+        }, 100);
+    });
+}
+});
+
+
+// ================================================================
+// ESCAPE HTML
+// ================================================================
+
+function escapeHtml(str) {
+
+    if (
+        str === null ||
+        str === undefined
+    ) {
+        return "";
+    }
+
+    return String(str)
+        .replace(
+            /&/g,
+            "&amp;"
+        )
+        .replace(
+            /</g,
+            "&lt;"
+        )
+        .replace(
+            />/g,
+            "&gt;"
+        )
+        .replace(
+            /"/g,
+            "&quot;"
+        )
+        .replace(
+            /'/g,
+            "&#39;"
+        );
+}
+
+
+// ================================================================
+// MERGE MENU WITH CART
+// ================================================================
+
+function mergeMenuWithCart(data, datas) {
+    const cartItems =
+        datas?.results?.items || {};
+
+    const merged = Object.entries(data.res).reduce(
+        (acc, [name, item]) => {
+
+            acc[item.id] = {
+                id: item.id,
+                name: name,
+                price: item.price,
+                file_url: item.file_url,
+                item_qty: item.item_qty ?? 0,
+                qty: cartItems[item.id]?.qty || 0
+            };
+
+            return acc;
+
+        },
+        {}
+    );
+
+    return merged;
+}
+
+// ================================================================
+// CART UPDATE STATE
+// ================================================================
+//
+// Kept here if you need these globally elsewhere.
+// ================================================================
+
+// const pendingUpdates = new Map();
+// const inFlightControllers = new Map();
+
+
+
+
 let map;
 let marker;
 let userLatt = null;
@@ -110,7 +929,8 @@ async function change(latt, long) {
         });
         if (!res.ok) throw new Error(`list_resturants failed: ${res.status}`);
         const data = await res.json();
-
+        console.log(data,datas);
+        
         if (data.success) {
             if (loading) loading.style.display = "none";
             if (Note) Note.style.display = "block";
@@ -154,9 +974,12 @@ async function getLocation() {
 }
 
 async function initHomePage() {
-    const display_resturants = document.getElementById("resturants_container");
-    if (!display_resturants) return; // safety: not actually on the home content
-
+    console.log("init home page");
+    
+    // const display_resturants = document.getElementById("resturants_container");
+    // if (!display_resturants) return; // safety: not actually on the home content
+    console.log("step 2");
+    
     const cartBtn = document.getElementById("CartBtn");
     const orderBtn = document.getElementById("OrdersBtn");
     const pathParts = window.location.pathname.split("/");
@@ -175,7 +998,6 @@ async function initHomePage() {
     const cancelbtn = document.getElementById("closeModal");
 
     const CACHE_KEY = getRestaurantCacheKey(userId);
-    const renderContainers = { display_resturants, no_results_container };
 
     // Show cached restaurants instantly — this is what makes tab-switching feel instant
     const cachedRestaurants = sessionStorage.getItem(CACHE_KEY);
@@ -197,7 +1019,8 @@ async function initHomePage() {
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap'
     }).addTo(map);
-
+    console.log("holla");
+    
     addListenerOnce(select_options, "change", async (e) => {
         const storedLocation = JSON.parse(localStorage.getItem("userLocation"));
         try {
@@ -299,33 +1122,32 @@ async function initHomePage() {
         }
 
         if (!cachedRestaurants && loading) loading.style.visibility = "visible";
-        const res = await fetch("/list_resturants", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ latt: userLatt, long: userLong, dist: 5 })
-        });
-        if (!res.ok) throw new Error(`list_resturants failed: ${res.status}`);
-        const data = await res.json();
-        if (data.success) {
-            if (loading) loading.style.display = "none";
-            if (Note) Note.style.display = "block";
-            renderRestaurants(data.results, renderContainers);
-            sessionStorage.setItem(CACHE_KEY, JSON.stringify(data.results));
-        } else if (!cachedRestaurants) {
-            alert("error loading resturants");
-        }
+        // const res = await fetch("/list_resturants", {
+        //     method: "POST",
+        //     headers: { "Content-Type": "application/json" },
+        //     body: JSON.stringify({ latt: userLatt, long: userLong, dist: 5 })
+        // });
+        // if (!res.ok) throw new Error(`list_resturants failed: ${res.status}`);
+        // const data = await res.json();
+        // if (data.success) {
+        // } else if (!cachedRestaurants) {
+        //     alert("error loading resturants");
+        // }
+        if (loading) loading.style.display = "none";
+        if (Note) Note.style.display = "block";
+        // sessionStorage.setItem(CACHE_KEY, JSON.stringify(data.results));
 
-        addListenerOnce(display_resturants, "click", function (e) {
-            const card = e.target.closest(".card");
-            if (card) {
-                const name = card.querySelector(".resturant_name").textContent;
-                const addresss = card.querySelector(".area").textContent;
-                const res_id = card.getAttribute("id");
-                window.location.href = `/menu/${encodeURIComponent(name)}/${encodeURIComponent(addresss)}/${encodeURIComponent(res_id)}/${encodeURIComponent(userId)}`;
-            }
-        });
-        addListenerOnce(cartBtn, "click", () => { window.location.href = `/cart/${userId}`; });
-        addListenerOnce(orderBtn, "click", () => { window.location.href = `/orders/${userId}`; });
+        // addListenerOnce(display_resturants, "click", function (e) {
+        //     const card = e.target.closest(".card");
+        //     if (card) {
+        //         const name = card.querySelector(".resturant_name").textContent;
+        //         const addresss = card.querySelector(".area").textContent;
+        //         const res_id = card.getAttribute("id");
+        //         window.location.href = `/menu/${encodeURIComponent(name)}/${encodeURIComponent(addresss)}/${encodeURIComponent(res_id)}/${encodeURIComponent(userId)}`;
+        //     }
+        // });
+        // addListenerOnce(cartBtn, "click", () => { window.location.href = `/cart/${userId}`; });
+        // addListenerOnce(orderBtn, "click", () => { window.location.href = `/orders/${userId}`; });
     } catch (e) {
         console.error("initHomePage location/restaurant load failed", e);
         if (!cachedRestaurants && Note) Note.style.display = "none";

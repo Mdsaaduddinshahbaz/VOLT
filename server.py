@@ -542,7 +542,8 @@ def list_item():
     if(types=="seller"):
         res_id=g.res_id
     else:
-        res_id=data["res_id"]
+        # res_id=data["res_id"]
+        res_id=""
     res=list_resturant_items(res_id,types)
     if(types=="seller"):
         return ({"success":True,"res":res["item_name"],"categories":res["categories"]})
@@ -577,18 +578,6 @@ def update_items():
             return ({"success":True})
         else:
             return ({"success":False,"message":res["message"]})
-    except Exception as e:
-        #print(e)
-        return({"success":False})
-@app.post("/add_item_carts")
-def carts():
-    try:
-        data=request.get_json()
-        itm_name=data["itm_name"]
-        itm_id=data["itm_id"]
-        res_id=data["res_id"]
-        add_customer_items(itm_name,res_id,itm_id)
-        return({"success":True})
     except Exception as e:
         #print(e)
         return({"success":False})
@@ -733,7 +722,8 @@ def addToCart():
         replace = data.get("replace", False)
 
         res = add_cart(
-            data["resid"],
+            # data["resid"],
+            "123",
             userid,
             data["item"],
             data["ress_name"],
@@ -749,7 +739,7 @@ def addToCart():
         return jsonify({"success": False, "message": res.get("message", "Unable to add item to cart")}), 400
 
     except Exception as e:
-        #print("add_to_cart error:", e)
+        print("add_to_cart error:", e)
         return jsonify({"success": False, "message": "Something went wrong, please try again"}), 500
 @app.get("/seller/menu/<name>/<seller_id>")
 def seller_page(name,seller_id):
@@ -1121,11 +1111,11 @@ def handle_order_completed(data):
         order_id = data.get("order_id")
         # res_id=data.get("res_id")
         res_id=g.res_id
-        user_id=verify_order(res_id,order_id)
-        if(user_id==None):
+        user_order_id=verify_order(res_id,order_id)
+        if(user_order_id==None):
             return {"success": False, "message": "Unauthorized order"}
         status=data.get("status")
-        print("user_id",user_id)
+        print("user_id",order_id,user_order_id)
         # send update to USER
         socketio.emit(
             "order_status_updated",
@@ -1135,7 +1125,7 @@ def handle_order_completed(data):
                 "res_id":res_id,
                 "status": status
             },
-            room=user_id
+            room=user_order_id
         )
         return({"success":True})
     except Exception as e:
@@ -1561,8 +1551,10 @@ def update_status_user():
         data=request.get_json()
         order_id=data["order_id"]
         status=data["status"]
+        print("holla")
         # userid=data["user_id"]
         result=update_order_status_user(order_id,status,userid)
+        print(result)
         if result["success"]:
             return jsonify(result)
 
@@ -1649,10 +1641,8 @@ def handle_user_cancel(data):
     try:
         print("in cancelled order")
         # data['res_ids'] is now a LIST: ["res1", "res2"]
-        res_list = data.get("res_ids", [])
-        
-        for res_id in res_list:
-            emit("seller_order_cancelled", data, room="warehouse")
+        # res_list = data.get("res_ids", [])
+        emit("seller_order_cancelled", data, room="warehouse")
     except Exception as e:
         #print(e)
         return({"success":False})
@@ -1951,7 +1941,7 @@ def validate_add_to_cart():
     
 
     required = [
-        "resid",
+        # "resid",
         "item",
         "qty",
         "item_id",
@@ -2012,7 +2002,7 @@ def validate_add_to_cart():
 
     # IDs
     try:
-        resid = (data["resid"])
+        # resid = (data["resid"])
         item_id = (data["item_id"])
     except Exception as e:
         #print(e)
@@ -2022,7 +2012,7 @@ def validate_add_to_cart():
         }), 400)
 
     return {
-        "resid": resid,
+        # "resid": resid,
         "item": item,
         "qty": qty,
         "item_id": item_id,

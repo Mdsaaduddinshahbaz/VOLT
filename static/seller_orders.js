@@ -242,13 +242,28 @@ socket.on("update_driver_location",(data)=>{
 })
 // Add this to seller_orders.js
 socket.on("seller_order_cancelled", (data) => {
-    console.log("User cancelled order:", data.token_no);
+    console.log("User cancelled order:", data);
 
     const cards = document.querySelectorAll(".order-card");
     cards.forEach(card => {
         const cardToken = card.querySelector(".token-no").textContent.split(": ")[1].trim();
+        const status = card
+    .querySelector(".order-header")
+    .querySelector(".order-status")
+    .classList.replace(
+        'status-placed',
+        `status-${data.status}`
+    );
+
+    card
+    .querySelector(".order-header")
+    .querySelector(".order-status").textContent="cancelled"
+        console.log(status);
         
-        if (cardToken === String(data.token_no)) {
+        console.log(cardToken,data.token_no);
+        
+        if (String(cardToken).trim() === String(data.token_no).trim()) {
+            // print("equal")
             // Optional: Show a "User Cancelled" overlay before removing
             card.style.backgroundColor = "#ffebee"; 
             setTimeout(() => card.remove(), 1500);
@@ -472,6 +487,8 @@ document.addEventListener("click", async (e) => {
             })
         })
         const data = await res.json()
+        console.log(data);
+        
         if (data.success) {
 
             socket.emit("order_completed", {
@@ -529,6 +546,8 @@ document.addEventListener("click", async (e) => {
             })
         })
         const data = await res.json()
+        console.log(data);
+        
         if (data.success) {
             console.log("emitted order_completed");
             

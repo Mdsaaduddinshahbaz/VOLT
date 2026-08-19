@@ -227,14 +227,14 @@ def generate_token():
         
         if not orders.find_one({"token_no": token}):
             return token
-def store_orders(userid, coordinates):
+def stores_orders(userid, coordinates):
     # #print("in store_orders db")
     # token = generate_token()
     ##print("in store orders db")
     start=time.perf_counter()
     token="123"
     items = get_cart(userid)
-
+    print("items",items)
     if not items or not items.get("cart"):
         return 404
 
@@ -360,6 +360,254 @@ def store_orders(userid, coordinates):
             raise
 
     return False
+def store_orders(userid, coordinates):
+    # #print("in store_orders db")
+    # token = generate_token()
+    ##print("in store orders db")
+
+    start = time.perf_counter()
+    token = "123"
+
+    items = get_cart(userid)
+
+    print("items", items)
+
+    if not items or not items.get("items"):
+        return 404
+
+    current_time = datetime.utcnow()
+
+    seller_docs = []
+    inventory_updates = []
+    restaurant_ids = []
+
+    # ---------------------------------------------------------
+    # Get cart items
+    # ---------------------------------------------------------
+
+    cart_items = items["items"]
+
+    item_ids = [
+        ObjectId(iid)
+        for iid in cart_items.keys()
+    ]
+
+    # ---------------------------------------------------------
+    # Get fresh inventory data
+    # ---------------------------------------------------------
+
+    fresh_docs = resturants_items.find(
+        {
+            "_id": {
+                "$in": item_ids
+            }
+        },
+        {
+            "_id": 1,
+            "price": 1,
+            "available": 1
+        }
+    )
+
+    price_map = {
+        str(d["_id"]): d
+        for d in fresh_docs
+    }
+
+    verified_items = {}
+
+    # ---------------------------------------------------------
+    # Validate cart items
+    # ---------------------------------------------------------
+
+    for item_id, item in cart_items.items():
+
+        fresh = price_map.get(item_id)
+
+        if not fresh:
+
+            return {
+                "success": False,
+                "message": "Item no longer available"
+            }
+
+        if fresh["available"] < item["qty"]:
+
+            return {
+                "success": False,
+                "message": f"{item.get('name', 'Item')} is out of stock"
+            }
+
+        if fresh["price"] != item["price"]:
+
+            print(
+                f"PRICE MISMATCH "
+                f"user={userid} "
+                f"item={item_id} "
+                f"cart={item['price']} "
+                f"actual={fresh['price']}"
+            )
+
+            return {
+                "success": False,
+                "message": (
+                    f"Price changed for "
+                    f"{item.get('name', 'an item')}, "
+                    f"please review your cart"
+                )
+            }
+
+        verified_item = dict(item)
+
+        verified_item["price"] = fresh["price"]
+
+        verified_items[item_id] = verified_item
+
+        # -----------------------------------------------------
+        # Inventory update
+        # -----------------------------------------------------
+
+        inventory_updates.append(
+            UpdateOne(
+                {
+                    "_id": ObjectId(item_id),
+                    "available": {
+                        "$gte": item["qty"]
+                    }
+                },
+                {
+                    "$inc": {
+                        "available": -item["qty"],
+                        "sold": item["qty"]
+                    }
+                }
+            )
+        )
+
+    # ---------------------------------------------------------
+    # Build order items
+    # ---------------------------------------------------------
+
+    order_items = {
+        "uid": userid,
+        "total": items["total"],
+        "items": verified_items
+    }
+
+    seller_order_ids = []
+
+    # ---------------------------------------------------------
+    # Create order transaction
+    # ---------------------------------------------------------
+
+    for attempt in range(MAX_RETRIES):
+
+        try:
+
+            with client.start_session() as session:
+
+                with session.start_transaction():
+
+                    result = orders.insert_one(
+                        {
+                            "user_id": userid,
+                            "token_no": token,
+                            "status": "placed",
+                            "items": order_items,
+                            "time": current_time,
+                            "coordinates": coordinates
+                        },
+                        session=session
+                    )
+
+                    parent = str(
+                        result.inserted_id
+                    )
+
+                    # -------------------------------------------------
+                    # Seller order
+                    #
+                    # Keeping your existing variable names.
+                    # Since there is no restaurant in the cart anymore,
+                    # restaurant-specific fields are not taken from cart.
+                    # -------------------------------------------------
+
+                    seller_doc = {
+                        "user_id": userid,
+                        "token_no": token,
+                        "items": verified_items,
+                        "status": "placed",
+                        "time": current_time,
+                        "user_adres": coordinates,
+                        "parent_order_id": parent
+                    }
+
+                    res = seller_orders.insert_one(
+                        seller_doc,
+                        session=session
+                    )
+
+                    seller_order_ids = [
+                        str(res.inserted_id)
+                    ]
+
+                    # -------------------------------------------------
+                    # Update inventory atomically
+                    # -------------------------------------------------
+
+                    if inventory_updates:
+
+                        inventory_result = (
+                            resturants_items.bulk_write(
+                                inventory_updates,
+                                session=session
+                            )
+                        )
+
+                        if (
+                            inventory_result.modified_count
+                            != len(inventory_updates)
+                        ):
+
+                            raise OperationFailure(
+                                "Inventory changed while checkout "
+                                "was processing."
+                            )
+
+            # ---------------------------------------------------------
+            # Delete cart only after successful transaction
+            # ---------------------------------------------------------
+
+            delete_cart(userid)
+
+            # print(
+            #     "completed at ",
+            #     time.perf_counter() - start
+            # )
+
+            return (
+                restaurant_ids,
+                seller_order_ids,
+                parent
+            )
+
+        except OperationFailure as e:
+
+            if (
+                "TransientTransactionError"
+                in e.details.get(
+                    "errorLabels",
+                    []
+                )
+            ):
+
+                time.sleep(0.05)
+
+                continue
+
+            raise
+
+    return False
 def get_orders(userid):
     final_orders=[]
     orderss=orders.find({"user_id":userid})
@@ -378,7 +626,8 @@ def store_seller_orders(res_id,items,userid):
     seller_orders.insert_one({"res_id":res_id,"items":items,"user_id":userid,"time":datetime.utcnow()})
 def get_seller_ordes(res_id):
     ##print(res_id)
-    orders=seller_orders.find({"restaurant_id":res_id})
+    # orders=seller_orders.find({"restaurant_id":res_id})
+    orders=seller_orders.find({})
     final_orders=[]
     ##print("seller_orders=",orders)
     for order in orders:
@@ -472,7 +721,7 @@ def update_order_status_seller(order_id, status, userid, res_id):
     with client.start_session() as session:
         with session.start_transaction():
             updated_seller_doc = seller_orders.find_one_and_update(
-                {"_id": ObjectId(order_id), "restaurant_id": res_id},
+                {"_id": ObjectId(order_id)},
                 {"$set": {"status": status}},
                 session=session,
                 return_document=ReturnDocument.AFTER
@@ -501,18 +750,26 @@ def get_restaurant_location(res_id):
     return {"lat": latt, "lng": long}
 
 def update_order_status_user(order_id,status,userid):
-    with client.start_session() as session:
-        with session.start_transaction():
-
-            
-            updated_order=orders.find_one_and_update({"_id":ObjectId(order_id),"user_id": userid},{"$set":{"status":status}},session=session,return_document=ReturnDocument.AFTER)
-            if not updated_order:
-                return {
-                    "success": False,
-                    "message": "Order not found or unauthorized"
-                }
-            seller_orders.update_many({"parent_order_id":str(updated_order["_id"])},{"$set":{"status":status}},session=session)
-            return ({"success":True})
+    print("in update order")
+    order_id=str(order_id).strip()
+    try:
+        with client.start_session() as session:
+            print("session started")
+            with session.start_transaction():
+                print("transaction started")
+                print("amigo?",str(order_id).strip())
+                updated_order=orders.find_one_and_update({"_id":ObjectId(order_id),"user_id": userid},{"$set":{"status":status}},session=session,return_document=ReturnDocument.AFTER)
+                print("updated_order",updated_order)
+                if not updated_order:
+                    print("in not updated_ordere")
+                    return {
+                        "success": False,
+                        "message": "Order not found or unauthorized"
+                    }
+                seller_orders.update_many({"parent_order_id":str(updated_order["_id"])},{"$set":{"status":status}},session=session)
+                return ({"success":True})
+    except Exception as e:
+        print("in update_status",str(e))
 def resturant_stats(res_id):
     seller_order_stats=seller_orders.find({"restaurant_id":res_id})
     Total_orders=0
@@ -590,14 +847,13 @@ def add_subcategory(res_id, category_id, subcat_name):
         }
 def verify_order(res_id, order_id):
     order = seller_orders.find_one({
-        "_id": ObjectId(order_id),
-        "restaurant_id": res_id
+        "_id": ObjectId(order_id)
     })
 
     if order is None:
         return None
 
-    return order["user_id"]
+    return order["parent_order_id"]
 # def get_resturantItem_price(res_id,item_id):
 #     ##print("in get item price")
 #     try:

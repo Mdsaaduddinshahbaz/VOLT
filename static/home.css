@@ -1141,3 +1141,848 @@ footer{
     user-select: none;
     -webkit-touch-callout: none;
 }
+
+
+/* ============================================================
+   MENU.CSS — "Order Ticket" system
+   A fast-food menu styled like a kitchen order ticket / receipt:
+   punchy display headlines, mono price tags, and a perforated
+   tear-line motif that shows up between the image and details
+   of every dish, and between menu rows.
+   Re-themed to match VOLT Partner: dark ink surface, signal-
+   orange accent, amber secondary highlight, mint-green success.
+   ============================================================ */
+
+/* @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@500;600;700&display=swap'); */
+
+:root {
+    --bg: #14171C;         /* ink surface */
+    --ink: #F5F3EC;        /* primary text (paper) */
+    --ink-soft: #98A2B3;   /* muted text (slate) */
+    --flame: #FF5D2E;      /* primary brand accent */
+    --flame-dark: #D9491F;
+    --mustard: #FFC53D;    /* secondary accent (amber) */
+    --maroon: #1B2027;     /* deep surface, nav/hero */
+    --card: #1B2027;       /* menu item card bg */
+    --card-hover: #262E3A;
+    --line: #2B323C;       /* hairline / divider */
+    --white: #20272F;      /* elevated panel surface */
+    --green: #3ED598;      /* success / confirm */
+    --danger: #FF5470;     /* error / invalid state */
+
+    --font-display: 'Space Grotesk', sans-serif;
+    --font-body: 'Inter', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+
+    --radius: 14px;
+    --shadow-card: 0 2px 0 var(--line), 0 12px 26px -18px rgba(0, 0, 0, 0.55);
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+    html { scroll-behavior: auto; }
+}
+
+/* ============================================================
+   NAVBAR
+   ============================================================ */
+
+.navbar {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: var(--maroon);
+    border-bottom: 3px solid var(--flame);
+}
+
+.nav-container {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.left-nav #cart {
+    height: 34px;
+    width: auto;
+    display: block;
+    filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.2));
+}
+
+.right-nav {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.right-nav ul {
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+}
+
+.right-nav ul li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--ink);
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 9px 14px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.right-nav ul li:hover {
+    background: rgba(255, 255, 255, 0.1);
+    transform: translateY(-1px);
+}
+
+.right-nav ul li:active { transform: translateY(0); }
+
+.right-nav ul li i {
+    color: var(--mustard);
+    font-size: 14px;
+}
+
+#orderBtn,
+#cartBtn {
+    background: var(--flame);
+}
+
+#orderBtn:hover,
+#cartBtn:hover {
+    background: var(--flame-dark);
+}
+
+#orderBtn i,
+#cartBtn i {
+    color: var(--ink);
+}
+
+/* Search */
+
+.search-container {
+    max-width: 0;
+    overflow: hidden;
+    transition: max-width 0.28s ease, padding 0.28s ease;
+    border-radius: 999px;
+    background: var(--white);
+}
+
+.search-container.active {
+    max-width: 220px;
+    padding: 0 4px;
+}
+
+.search-container input {
+    width: 200px;
+    border: none;
+    outline: none;
+    background: transparent;
+    font-family: var(--font-body);
+    font-size: 14px;
+    padding: 9px 14px;
+    color: var(--ink);
+}
+
+.search-container input::placeholder {
+    color: var(--ink-soft);
+}
+
+/* ============================================================
+   PAGE / LOADING
+   ============================================================ */
+
+.menu-container {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 28px 20px 80px;
+    position: relative;
+    min-height: 60vh;
+}
+
+/* Note: if #loading is a static image asset rather than drawn
+   with CSS, it may still carry the old cream/mustard palette —
+   swap the file, or ask and I can rebuild it as a CSS spinner. */
+#loading {
+    display: block;
+    width: 46px;
+    height: 46px;
+    margin: 80px auto;
+    animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ============================================================
+   BREADCRUMBS
+   ============================================================ */
+
+.breadcrumbs {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--ink-soft);
+    letter-spacing: 0.02em;
+    margin-bottom: 18px;
+}
+
+.breadcrumbs span {
+    color: var(--flame);
+    font-weight: 700;
+}
+
+/* ============================================================
+   RESTAURANT HEADER
+   ============================================================ */
+
+.res-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 14px;
+}
+
+.res-info h1 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(34px, 6vw, 52px);
+    line-height: 0.98;
+    letter-spacing: -0.01em;
+    margin: 0 0 8px;
+    color: var(--ink);
+    text-transform: uppercase;
+}
+
+.res-location {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    font-size: 14px;
+    color: var(--ink-soft);
+    font-weight: 500;
+}
+
+.res-location::before {
+    content: '\f3c5';
+    font-family: 'Font Awesome 6 Free';
+    font-weight: 900;
+    color: var(--flame);
+    font-size: 13px;
+}
+
+.res-delivery-info {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 22px;
+}
+
+.res-delivery-info span {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    color: var(--ink);
+    font-size: 13px;
+    font-weight: 700;
+    padding: 7px 13px;
+    border-radius: 999px;
+}
+
+.res-delivery-info span i {
+    color: var(--flame);
+    font-size: 12px;
+}
+
+/* Divider styled as a ticket tear-line */
+hr.divider {
+    border: none;
+    height: 1px;
+    margin: 4px 0 28px;
+    background-image: linear-gradient(to right, var(--line) 60%, transparent 0%);
+    background-size: 14px 1px;
+    background-repeat: repeat-x;
+    position: relative;
+}
+
+hr.divider::before,
+hr.divider::after {
+    content: '';
+    position: absolute;
+    top: -7px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--bg);
+    border: 1px solid var(--line);
+}
+
+hr.divider::before { left: -20px; }
+hr.divider::after { right: -20px; }
+* {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+}
+* {
+    -webkit-tap-highlight-color: transparent;
+}
+/* ============================================================
+   MENU SECTION + ITEMS
+   ============================================================ */
+
+.menu-section {
+    display: flex;
+    flex-direction: column;
+}
+
+.menu-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 18px 4px;
+    animation: rise 0.35s ease both;
+}
+
+@keyframes rise {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.item-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.item-details h3 {
+    font-family: var(--font-body);
+    font-weight: 700;
+    font-size: 17px;
+    margin: 0 0 8px;
+    color: var(--ink);
+}
+
+.item-details .price {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--maroon);
+    margin: 0;
+    display: inline-block;
+    padding: 3px 9px;
+    background: var(--mustard);
+    border-radius: 5px;
+}
+
+.item-details .price::before {
+    content: '\20B9 ';
+}
+
+/* Image + controls column, separated from details by a
+   perforated "tear" edge — the ticket-stub signature */
+.item-img-wrapper {
+    position: relative;
+    flex-shrink: 0;
+    width: 132px;
+    padding-left: 18px;
+    border-left: 2px dashed var(--line);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+#ReplaceContainer{
+    display: none !important;
+    width: 60%;
+    background: var(--white);
+    border-radius: 17px;
+        position: absolute;
+    top: 250px;
+    justify-self: center;
+    border: 1.5px solid var(--line);
+    box-shadow: var(--shadow-card);
+    /* padding: 33px 73px; */
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    /* align-self: center; */
+    flex-direction: column;
+    padding: 11px;
+    color: var(--ink);
+}
+#ReplaceContainer.show{
+    display: block !important;
+    z-index: 111;
+}
+#message{
+        margin-bottom: 23px;
+    display: inline;
+    width: max-content;
+    align-self: center;
+}
+#controlBtn{
+    align-self: center;
+}
+#controlBtn button{
+        border-radius: 6px;
+    width: 121px;
+    color: var(--bg);
+    background: var(--green);
+    font-weight: 700;
+    border: none;
+    min-width: max-content;
+    padding: 8px 0;
+    cursor: pointer;
+
+}
+.overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(6, 7, 9, 0.6);
+    z-index: 45;
+}
+
+.overlay.show {
+    display: block;
+}
+.item-img-wrapper img {
+    width: 112px;
+    height: 90px;
+    object-fit: cover;
+    border-radius: 10px;
+    box-shadow: var(--shadow-card);
+    border: 1px solid var(--line);
+}
+/* footer{
+        position: sticky;
+    bottom: 13px;
+    border: 2px solid black;
+    padding: 10px;
+    border-radius: 13px;
+    justify-self: center;
+    width: 80%;
+    color: white;
+    background: var(--maroon);
+} */
+ footer {
+    position: sticky;
+    bottom: 13px;
+
+    /* left: 50%;
+    transform: translateX(-50%); */
+    visibility: hidden;
+    width: 0 !important;
+    overflow: hidden;
+
+    border: 2px solid var(--line);
+    padding: 10px;
+    border-radius: 13px;
+    color: var(--ink);
+    background: var(--maroon);
+
+    transition: width 0.4s ease;
+}
+
+footer.show {
+    justify-self: center;
+    visibility: visible;
+    width: 80% !important;
+}
+#goToCartContainer{
+    display: flex;
+    justify-content: space-between;
+}
+#GoCartBtn{
+    cursor: pointer;
+}
+.customisable {
+    margin: 0;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--ink-soft);
+    font-weight: 700;
+}
+
+.add-btn {
+    width: 112px;
+    margin-top: -18px;
+    background: var(--white);
+    color: var(--flame);
+    border: 1.5px solid var(--flame);
+    border-radius: 8px;
+    font-family: var(--font-body);
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.03em;
+    padding: 8px 0;
+    cursor: pointer;
+    box-shadow: 0 3px 0 var(--flame);
+    transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+}
+
+.add-btn:hover {
+    background: var(--card-hover);
+}
+
+.add-btn:active {
+    transform: translateY(3px);
+    box-shadow: 0 0 0 var(--flame);
+}
+
+.add-btn:focus-visible,
+.qty-btn:focus-visible,
+.right-nav ul li:focus-visible {
+    outline: 2px solid var(--flame);
+    outline-offset: 2px;
+}
+
+.quantity-control {
+    /* width: 112px; */
+    /* margin-top: -18px; */
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--flame);
+    border-radius: 8px;
+    padding: 6px 4px;
+    box-shadow: 0 3px 0 var(--flame-dark);
+}
+
+.qty-btn {
+    width: 26px;
+    height: 26px;
+    border: none;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.18);
+    color: var(--ink);
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.12s ease;
+}
+
+.qty-btn:hover { background: rgba(255, 255, 255, 0.32); }
+.qty-btn:active { transform: scale(0.94); }
+
+.item_qty {
+    color: var(--ink);
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 14px;
+}
+#CartOrderContainer.show{
+    display: flex;
+}
+#CartOrderContainer{
+    display: flex;
+}
+#hideCartOrderBtn{
+    display: none;
+}
+/* Perforated tear-line between rows (mirrors hr.divider) */
+hr.item-divider {
+    border: none;
+    height: 0;
+    border-top: 1px dashed var(--line);
+    margin: 0;
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+
+@media (max-width: 560px) {
+    .nav-container { padding: 10px 14px; }
+    .right-nav ul li span { display: none; }
+    .right-nav ul li { padding: 9px 11px; }
+
+    .menu-container { padding: 20px 14px 64px; }
+
+    .menu-item { align-items: flex-start; }
+
+    .item-img-wrapper {
+        width: 96px;
+        padding-left: 12px;
+    }
+
+    .item-img-wrapper img {
+        width: 88px;
+        height: 72px;
+    }
+
+    /* .add-btn,
+    .quantity-control {
+        width: 88px;
+    } */
+
+    .res-info h1 { font-size: 30px; }
+}
+
+@media (max-width: 400px) {
+    .search-container.active { max-width: 150px; }
+    .search-container input { width: 130px; }
+}
+@media (max-width: 390px) {
+    #CartOrderContainer.hide{
+    display: none;
+    }
+    #CartOrderContainer.show{
+    display: block;
+    position: absolute;
+    top: 72px;
+    right: 1px;
+    }
+    #orderBtn{
+        margin-bottom: 10px;
+    }
+    #hideCartOrderBtn{
+        display: block;
+        color: var(--ink);
+        margin: 0;
+    }
+}
+@media (max-width: 360px) {
+    .right-nav:has(.search-container.active) {
+        display: block;
+    }
+}
+#NO{
+    background: var(--danger) !important;
+}
+@media (max-width:300px) {
+    #controlBtn{
+    display: flex;
+    justify-content: space-between;
+    }
+
+}
+
+
+
+ /* ============================================================
+   TWO-COLUMN MENU CARD LAYOUT
+   ============================================================ */
+
+.menu-section {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.menu-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 15px;
+}
+
+/* ============================================================
+   MENU ITEM CARD
+   ============================================================ */
+
+.menu-item {
+    display: flex;
+    flex-direction: column;
+
+    width: 100%;
+    min-width: 0;
+
+    padding: 0;
+    margin: 0;
+
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    overflow: hidden;
+
+    background: var(--card);
+    box-shadow: var(--shadow-card);
+
+    animation: rise 0.35s ease both;
+}
+
+/* ============================================================
+   IMAGE
+   ============================================================ */
+
+.item-img-wrapper {
+    position: relative;
+
+    width: 100%;
+    height: 160px;
+
+    padding: 0;
+    border: none;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.item-img-wrapper img {
+    display: block;
+
+    width: 100%;
+    height: 160px;
+
+    object-fit: cover;
+
+    border: none;
+    border-radius: 0;
+
+    box-shadow: none;
+}
+
+/* ============================================================
+   ITEM DETAILS
+   ============================================================ */
+
+.item-details {
+    width: 100%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 12px;
+}
+
+.item-details h3 {
+    margin: 0px;
+    width: 70%;
+    word-wrap:anywhere;
+    font-family: var(--font-body);
+    font-weight: 700;
+    font-size: 15px;
+    line-height: 1.25;
+
+    color: var(--ink);
+}
+
+/* ============================================================
+   PRICE
+   ============================================================ */
+
+.item-details .price {
+    margin: 0;
+
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 14px;
+
+    color: #ffc53c;
+
+    padding: 0;
+    background: none;
+    border-radius: 0;
+}
+.add-btn{
+    margin-top: 10px;
+    width: 100%;
+}
+.item-details .price::before {
+    content: '\20B9 ';
+}
+
+/* ============================================================
+   ADD BUTTON
+   ============================================================ */
+
+.item-img-wrapper .add-btn {
+    width: auto;
+    min-width: 65px;
+
+    margin: 0;
+
+    padding: 6px 12px;
+
+    background: var(--white);
+    color: var(--flame);
+
+    border: 1.5px solid var(--flame);
+    border-radius: 7px;
+
+    box-shadow: 0 2px 0 var(--flame);
+
+    font-size: 12px;
+}
+
+/* ============================================================
+   QUANTITY CONTROL
+   ============================================================ */
+
+.item-img-wrapper .quantity-control {
+    width: auto;
+    min-width: 80px;
+
+    margin: 0;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    background: var(--flame);
+    border-radius: 7px;
+
+    padding: 4px;
+}
+.quantity-control{
+    margin-top: 10px;
+}
+/* ============================================================
+   CUSTOMISABLE
+   ============================================================ */
+
+.item-img-wrapper .customisable {
+    margin: 0;
+
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+
+    color: var(--ink-soft);
+    font-weight: 700;
+}
+
+/* ============================================================
+   DIVIDER
+   ============================================================ */
+
+hr.item-divider {
+    display: none;
+}
+
+/* Empty second column when item count is odd */
+.menu-item.empty {
+    visibility: hidden;
+}
