@@ -4,14 +4,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Swiggy Clone | Food Delivery</title>
+    <title>Burger King Menu | Swiggy Clone</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='home.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='user_navbar.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="../static/user_navbar.css">
     <link rel="stylesheet" href="../static/cart.css">
     <link rel="stylesheet" href="../static/orders.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <link rel="stylesheet" href="../static/home.css">
-    <!-- <link rel="stylesheet" href="../static/menu.css"> -->
 
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 </head>
@@ -24,19 +26,19 @@
                 <!-- <img src="../static/logo2.png" alt="Swiggy Logo" class="logo"> -->
                 <div class="location-overlay" id="locationOverlay"></div>
                 <div style="display: flex;flex-direction: column;">
-                <div style="display: flex; justify-content: space-between;" >
-                <div class="location-trigger" id="locationTrigger">
-                    <i class="fa-solid fa-location-dot"></i>
-                    <span id="currentAddress">
-                        Select Location
-                    </span>
-                    <i class="fa-solid fa-chevron-down"></i>
-                </div>
-                <img src="../static/profile.png" alt="Swiggy Logo" class="logo" id="profileLogo">
-                </div>
-                <div class="searchBarContainer" id="searchContainer">
-                <input type="text" placeholder="Enter Resturant Name..." id="searchInput">
-                </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <div class="location-trigger" id="locationTrigger">
+                            <i class="fa-solid fa-location-dot"></i>
+                            <span id="currentAddress">
+                                Select Location
+                            </span>
+                            <i class="fa-solid fa-chevron-down"></i>
+                        </div>
+                        <img src="../static/profile.png" alt="Swiggy Logo" class="logo" id="profileLogo">
+                    </div>
+                    <div class="searchBarContainer">
+                        <input type="text" placeholder="Enter Resturant Name..." id="searchInput">
+                    </div>
                 </div>
                 <div class="location-box" id="locationBox">
                     <div class="location-header">
@@ -94,50 +96,44 @@
         </div>
     </header>
     <div id="spa-content">
-     <div id="addressTagModal" class="modal">
-            <div class="modal-content">
-                <h3>Save Address As</h3>
 
-                <div class="tag-options">
-                    <button class="tag-btn" data-tag="Home">🏠 Home</button>
-                    <button class="tag-btn" data-tag="Work">💼 Work</button>
-                    <button class="tag-btn" data-tag="Other">📍 Other</button>
+        <main class="menu-container">
+            <img src="{{ url_for('static', filename='loading-spinner.svg') }}" alt="Loading" id="loading">
+            <nav class="breadcrumbs">
+                Home / Hyderabad / <span>Burger King</span>
+            </nav>
+
+
+            <section class="menu-section" id="menu_container">
+
+
+            </section>
+            <div class="overlay" id="overlayContainer"></div>
+            <section id="ReplaceContainer">
+                <span id="message">
+                    Error:
+                </span>
+                <div id="controlBtn">
+                    <button id="NO">NO</button>
+                    <button id="YES">YES</button>
                 </div>
-
-                <button id="closeModal" class="cancel-btn">
-                    Cancel
-                </button>
+            </section>
+        </main>
+        <footer>
+            <div id="goToCartContainer">
+                <div id="TotalPrice">
+                    <span>Total:</span>
+                    <span id="amount">0</span>
+                </div>
+                <span id="GoCartBtn">Go To Cart ▶</span>
             </div>
-        </div>
-    <main class="menu-container">
-        <img src="{{ url_for('static', filename='loading-spinner.svg') }}" alt="Loading" id="loading">
-
-        <!-- <hr class="divider"> -->
-
-        <section class="menu-section" id="menu_container">
-
-            
-        </section>
-        <div class="overlay" id="overlayContainer"></div>
-    </main>
-    <footer>
-        <div id="goToCartContainer">
-            <div id="TotalPrice">
-            <span>Total:</span>
-            <span id="amount">0</span>
-            </div>
-            <span id="GoCartBtn">Go To Cart  ▶</span>
-        </div>
-    </footer>
-<!-- <script src="{{ url_for('static', filename='hom.js') }}"></script> -->
-
-    <script src="../static/home.js"></script>
-    <script src="../static/user_navbar.js"></script>
-     <script src="../static/spa_router.js"></script>
-    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
-    <script>
-        lucide.createIcons();
-    </script>
+        </footer>
+    </div>
+    <script src="{{ url_for('static', filename='home.js') }}"></script>
+    <script src="{{ url_for('static', filename='spa_router.js') }}"></script>
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+    <!-- <script src="{{ url_for('static', filename='home.js') }}"></script> -->
 </body>
 
 </html>

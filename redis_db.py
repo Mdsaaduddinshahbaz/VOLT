@@ -377,12 +377,12 @@ def update_cart_qty(uid, item_id, change):
             "message": "Invalid change value"
         }
 
-    if change not in (-1, 1):
+    # if change not in (-1, 1):
 
-        return {
-            "success": False,
-            "message": "change must be +1 or -1"
-        }
+    #     return {
+    #         "success": False,
+    #         "message": "change must be +1 or -1"
+    #     }
 
     uid = str(uid)
     item_id = str(item_id)

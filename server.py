@@ -543,7 +543,7 @@ def list_item():
         res_id=g.res_id
     else:
         # res_id=data["res_id"]
-        res_id=""
+        res_id="123"
     res=list_resturant_items(res_id,types)
     if(types=="seller"):
         return ({"success":True,"res":res["item_name"],"categories":res["categories"]})
@@ -678,6 +678,7 @@ def updateCart():
         qty = data.get("qty")
 
         if item_id is None or qty is None:
+            print("error here")
             return jsonify({"success": False, "message": "item_id and qty are required"}), 400
 
         try:
@@ -686,7 +687,7 @@ def updateCart():
             return jsonify({"success": False, "message": "qty must be an integer"}), 400
 
         result = update_cart_qty(g.user_id, item_id, qty)
-
+        print(result)
         if result["success"]:
             return jsonify({
                 "success": True,
