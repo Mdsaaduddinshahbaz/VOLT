@@ -31,7 +31,8 @@ let warehouseLng = null;
 // ============================================================
 
 socket.on("driver_assigned", (data) => {
-
+    console.log(data);
+    
     console.log(
         "Driver assigned:",
         data.order_id
@@ -175,15 +176,18 @@ socket.on("driver_assigned", (data) => {
                 // ------------------------------------------------
                 // Warehouse coordinates
                 // ------------------------------------------------
-
+                let warehouseLoc=data.warehouse_coords
+                
+                // console.log(warehouseLoc.lat);
+                // console.log(warehouseLoc.long)
                 warehouseLat =
                     Number(
-                        17.39532841640067
+                        warehouseLoc.lat
                     );
 
                 warehouseLng =
                     Number(
-                        78.43148662789395
+                        warehouseLoc.long
                     );
 
 
@@ -298,12 +302,45 @@ console.log("map instanceof Leaflet Map:", map instanceof L.Map);
 
                 } else {
 
-                    map.setView(
-                        [
-                            warehouseLat,
-                            warehouseLng
-                        ],
-                        13
+                    // map.setView(
+                    //     [
+                    //         warehouseLat,
+                    //         warehouseLng
+                    //     ],
+                    //     13
+                    // );
+                    currentDriverPosition=data.driver_coords
+                    let latt=data.driver_coords.latt
+                    let long=data.driver_coords.long
+                    currentDriverPosition = L.latLng(
+                        latt,
+                        long
+                    )
+                    await updateDriverRoute(
+                        latt,
+                        long
+                    );
+
+                    driverMarker =
+                        L.marker([
+                            latt,
+                            long
+                        ])
+                            .addTo(map)
+                            .bindPopup("Driver");
+                    map.fitBounds(
+                        L.latLngBounds([
+                            warehouseMarker
+                                .getLatLng(),
+
+                            currentDriverPosition
+                        ]),
+                        {
+                            padding: [
+                                40,
+                                40
+                            ]
+                        }
                     );
                 }
             }

@@ -1628,7 +1628,8 @@ def accept_delivery_order(order_id, driver_id, redis_data):
             "order_id": str(order_id),
             "token_no": result["token_no"],
             "amount": amount,
-            "items": items_seller
+            "items": items_seller,
+            "warehouse_coords":{"lat":redis_data.get("warehouse_lat"),"long":redis_data.get("warehouse_lng"),}
         }
     }
 

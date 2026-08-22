@@ -947,6 +947,7 @@ def accept_order_server():
     driver_id = g.driver_id
     data = request.get_json(silent=True) or {}
     order_id = data.get("order_id")
+    driver_coords=data.get("driver_coords")
     print("order_id",order_id)
     if not order_id:
         return jsonify({"success": False, "message": "order_id is required"}), 400
@@ -959,12 +960,12 @@ def accept_order_server():
         return jsonify({"success": False, "message": "Order already taken"}), 409
 
     result = accept_delivery_order(order_id, driver_id, redis_data)
-    socketio.emit("driver_assigned", {"order_id": order_id}, room="warehouse")
-    socketio.emit("driver_assigned", {"order_id": order_id}, room=order_id)
     if not result["success"]:
         print(result)
         delete_lock(order_id)
         return jsonify({"success": False, "message": result["message"]}), 400
+    socketio.emit("driver_assigned", {"order_id": order_id,"warehouse_coords":result["order"]["warehouse_coords"],"driver_coords":driver_coords}, room="warehouse")
+    socketio.emit("driver_assigned", {"order_id": order_id,"warehouse_coords":result["order"]["warehouse_coords"],"driver_coords":driver_coords}, room=order_id)
     #print("accept_order_server",time.perf_counter()-start)
     return jsonify({"success": True, "order": result["order"]})
 @app.route("/driver/active_order",methods=["POST","GET"])

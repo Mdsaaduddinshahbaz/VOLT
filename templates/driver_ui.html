@@ -2478,44 +2478,59 @@
 
         async function acceptOrder() {
             console.log("pending order data",state.pendingOrder);
-            
-            const p = state.pendingOrder;
-            try {
-                const res = await fetch("/accept_order", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ order_id: p.order_id })
-                });
-                const data = await res.json();
-                console.log("/accept_order data",data);
-                
-                if (data.success) {
-                    clearInterval(state.countdownTimer);
-                    hideIncomingSheet();
-
-                    state.activeOrder = {
-                        order_id: data.order.order_id,
-                        id: 'VP' + data.order.token_no,
-                        store: p.store, customer: p.customer, addr: p.addr, dist: p.dist,
-                        amt: data.order.amount, customer_dist: p.customer_dist, warehouse_dist: p.warehouse_dist,
-                        items: data.order.items
-                    };
-                    console.log("active order updated",state.activeOrder);
-                    
-                    state.odStep = 0;
-                    startLocationTracking(state.activeOrder.order_id)
-                    saveSession();
-                    renderHomeStatus();
-                    renderOrderDetail();
-                    showToast('Order accepted — head to pickup');
-                    showScreen('screen-order-detail');
-                } else {
-                    showToast(data.message || 'Order no longer available');
+            if (!navigator.geolocation) return;
+            let lat=null
+            let long=null
+            navigator.geolocation.getCurrentPosition(
+                async (position) => {
+                    lat = position.coords.latitude;
+                    long = position.coords.longitude;
+                    if(lat===null||long===null) return;
+                    const p = state.pendingOrder;
+                    try {
+                        const res = await fetch("/accept_order", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ order_id: p.order_id, driver_coords:{"latt":lat,"long":long} })
+                        });
+                        const data = await res.json();
+                        console.log("/accept_order data",data);
+                        
+                        if (data.success) {
+                            clearInterval(state.countdownTimer);
+                            hideIncomingSheet();
+        
+                            state.activeOrder = {
+                                order_id: data.order.order_id,
+                                id: 'VP' + data.order.token_no,
+                                store: p.store, customer: p.customer, addr: p.addr, dist: p.dist,
+                                amt: data.order.amount, customer_dist: p.customer_dist, warehouse_dist: p.warehouse_dist,
+                                items: data.order.items
+                            };
+                            console.log("active order updated",state.activeOrder);
+                            
+                            state.odStep = 0;
+                            startLocationTracking(state.activeOrder.order_id)
+                            saveSession();
+                            renderHomeStatus();
+                            renderOrderDetail();
+                            showToast('Order accepted — head to pickup');
+                            showScreen('screen-order-detail');
+                        } else {
+                            showToast(data.message || 'Order no longer available');
+                        }
+                    } catch (err) {
+                        console.error(err);
+                        showToast('Something went wrong, please try again');
+                    }
+                },
+                (error) => {
+                    console.error(
+                        "Location error:",
+                        error
+                    );
                 }
-            } catch (err) {
-                console.error(err);
-                showToast('Something went wrong, please try again');
-            }
+            )
         }
 
         /* ============================================================
