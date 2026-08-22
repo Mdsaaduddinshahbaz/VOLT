@@ -1336,11 +1336,47 @@
             background:
                 linear-gradient(135deg, #1a2b24 0%, #182028 60%);
             border: 1px solid var(--stroke);
+            transition: height .35s cubic-bezier(.32, .72, 0, 1);
+        }
+
+        .map-block.expanded {
+            height: 440px;
+        }
+
+        .map-expand-toggle {
+            position: absolute;
+            bottom: 12px;
+            left: 12px;
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            background: rgba(20, 23, 28, .85);
+            backdrop-filter: blur(6px);
+            border: 1px solid var(--stroke);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text);
+            z-index: 5;
+        }
+
+        .map-expand-toggle svg {
+            width: 16px;
+            height: 16px;
         }
 
         #map {
             height: 100%;
             width: 100%;
+        }
+
+        .driver-live-dot {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--green);
+            border: 2px solid #fff;
+            box-shadow: 0 0 0 4px rgba(62, 213, 152, .25);
         }
 
         .map-block .grid {
@@ -1679,13 +1715,13 @@
                 <div class="field">
                     <label for="driverEmailInput">Email</label>
                     <div class="phone-input-wrap">
-                        <input id="driverEmailInput" type="email" placeholder="you@example.com" style="width:100%;">
+                        <input id="driverEmailInput" type="email" placeholder="you@example.com" autocomplete="username" style="width:100%;">
                     </div>
                 </div>
                 <div class="field">
                     <label for="driverPasswordInput">Password</label>
                     <div class="phone-input-wrap">
-                        <input id="driverPasswordInput" type="password" placeholder="••••••••" style="width:100%;">
+                        <input id="driverPasswordInput" type="password" placeholder="••••••••" autocomplete="current-password" style="width:100%;">
                     </div>
                 </div>
                 <button class="btn btn-primary" style="width:100%; margin-top:14px;" onclick="driverLogin()">Log
@@ -1968,6 +2004,11 @@
                     <div class="pin a"><span></span></div>
                     <div class="pin b"><span></span></div>
                     <div class="eta-chip"><span class="dot"></span> 7 min · 1.8 km</div>
+                    <button class="map-expand-toggle" id="mapExpandToggle" onclick="toggleMapExpanded()" title="Expand map">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M8 3H5a2 2 0 00-2 2v3M16 3h3a2 2 0 012 2v3M8 21H5a2 2 0 01-2-2v-3M16 21h3a2 2 0 002-2v-3" />
+                        </svg>
+                    </button>
                 </div>
 
                 <div class="od-body">
@@ -2071,6 +2112,21 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         /* ============================================================
+           SMALL SECURITY HELPER — escape any server/user-controlled
+           string before it's inserted via innerHTML, so a malicious
+           document type, order note, item name, etc. can't run as HTML.
+           ============================================================ */
+        function escapeHtml(str) {
+            return String(str ?? '').replace(/[&<>"']/g, (c) => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;'
+            }[c]));
+        }
+
+        /* ============================================================
            INIT — resolve auth, then restore any in-progress delivery
            ============================================================ */
         (async function init() {
@@ -2083,12 +2139,6 @@
             }
 
             restoreSession();
-
-            // if nothing survived in sessionStorage (fresh tab / app reopen),
-            // fall back to asking the backend if there's an order in flight
-            // if (state.activeOrder) {
-
-            // }
 
             socket.connect();
             fetchHomeStats();
@@ -2164,8 +2214,8 @@
             }
         });
 
-        socket.on("update_driver_location",(data)=>{
-            
+        socket.on("update_driver_location", (data) => {
+
         })
 
         /* ============================================================
@@ -2181,7 +2231,17 @@
             odStep: 0, // 0=to pickup,1=at pickup,2=to drop,3=at drop(otp)
             mapLayers: [],
             recent_order: null,
-            pendingOrder: null
+            pendingOrder: null,
+
+            // live in-app navigation
+            driverLiveMarker: null,
+            driverLiveRoute: null,
+            lastNavPos: null,
+            lastRouteCalcAt: 0,
+            navAnimFrame: null,
+
+            // last known location, reused to speed up order acceptance
+            lastKnownPosition: null
         };
 
         /* ============================================================
@@ -2300,11 +2360,8 @@
 
         async function fetchHomeStats() {
             try {
-                console.log("in fetch home stats");
-
                 const res = await fetch('/driver/home_stats', { method: 'POST' });
                 const data = await res.json();
-                console.log(data);
 
                 if (data.success) {
                     document.getElementById('statEarnings').textContent = '₹' + data.earnings_today;
@@ -2334,8 +2391,8 @@
                 if (docsData.success && docsData.documents.length) {
                     list.innerHTML = docsData.documents.map(d => `
                         <div class="doc-row">
-                          <span class="t">${d.type}</span>
-                          <span class="badge ${d.status === 'approved' ? 'badge-green' : 'badge-slate'}">${d.status}</span>
+                          <span class="t">${escapeHtml(d.type)}</span>
+                          <span class="badge ${d.status === 'approved' ? 'badge-green' : 'badge-slate'}">${escapeHtml(d.status)}</span>
                         </div>
                     `).join('');
                 } else {
@@ -2369,8 +2426,6 @@
            ONLINE TOGGLE + HOME STATUS
            ============================================================ */
         function toggleOnline() {
-            console.log("online now");
-
             state.online = !state.online;
             updateOnlineUI();
             renderHomeStatus();
@@ -2398,8 +2453,8 @@
         <div class="pulse-dot"></div>
         <div class="info">
           <div class="t1">Active delivery</div>
-          <div class="t2">Order #${o.id} · ${state.odStep < 1 ? 'Pickup' : 'Drop'} in ${state.odStep < 1 ? '400m' : o.dist}</div>
-          <div class="t3">${o.customer} · +₹${o.amt}</div>
+          <div class="t2">Order #${escapeHtml(o.id)} · ${state.odStep < 1 ? 'Pickup' : 'Drop'} in ${state.odStep < 1 ? '400m' : escapeHtml(o.dist)}</div>
+          <div class="t3">${escapeHtml(o.customer)} · +₹${escapeHtml(o.amt)}</div>
         </div>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
       </div>`;
@@ -2427,8 +2482,7 @@
         function triggerIncomingOrder(store, amt, distance, customer_name, order_id, customer_dist, warehouse_dist) {
             const pick = { store: store, customer: customer_name, addr: "", dist: distance, amt: amt, order_id: order_id, customer_dist: customer_dist, warehouse_dist: warehouse_dist };
             state.pendingOrder = pick;
-            console.log("trigger incomming order data",pick);
-            
+
             document.getElementById('sheetPickupName').textContent = store;
             document.getElementById('sheetAmt').textContent = '+₹' + amt;
             document.getElementById('sheetDist').textContent = distance + ' · drop near ' + customer_name + "'s location";
@@ -2476,61 +2530,99 @@
             }
         }
 
+        /* ============================================================
+           ACCEPT ORDER — sped up.
+           The old flow always forced a brand-new GPS fix before hitting
+           /accept_order, which can take several seconds and feels stuck.
+           We now reuse a recent cached fix (captured when the driver went
+           online) instantly when available, only falling back to a fresh
+           lookup — with a short timeout — if we don't have one. The button
+           is also disabled/relabelled immediately so the tap is acknowledged.
+           ============================================================ */
         async function acceptOrder() {
-            console.log("pending order data",state.pendingOrder);
-            if (!navigator.geolocation) return;
-            let lat=null
-            let long=null
-            navigator.geolocation.getCurrentPosition(
-                async (position) => {
+            const p = state.pendingOrder;
+            if (!p) return;
+
+            if (!navigator.geolocation) {
+                showToast('Location is required to accept orders');
+                return;
+            }
+
+            const acceptBtn = document.querySelector('#incomingOverlay .sheet-actions .btn-primary');
+            if (acceptBtn) {
+                acceptBtn.disabled = true;
+                acceptBtn.textContent = 'Accepting…';
+            }
+
+            const getFreshPosition = () => new Promise((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(resolve, reject, {
+                    enableHighAccuracy: false,
+                    timeout: 4000,
+                    maximumAge: 20000 // accept a recent cached fix instead of forcing a new GPS lock
+                });
+            });
+
+            let lat, long;
+            const cached = state.lastKnownPosition;
+
+            if (cached && Date.now() - cached.ts < 20000) {
+                lat = cached.lat;
+                long = cached.lng;
+            } else {
+                try {
+                    const position = await getFreshPosition();
                     lat = position.coords.latitude;
                     long = position.coords.longitude;
-                    if(lat===null||long===null) return;
-                    const p = state.pendingOrder;
-                    try {
-                        const res = await fetch("/accept_order", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ order_id: p.order_id, driver_coords:{"latt":lat,"long":long} })
-                        });
-                        const data = await res.json();
-                        console.log("/accept_order data",data);
-                        
-                        if (data.success) {
-                            clearInterval(state.countdownTimer);
-                            hideIncomingSheet();
-        
-                            state.activeOrder = {
-                                order_id: data.order.order_id,
-                                id: 'VP' + data.order.token_no,
-                                store: p.store, customer: p.customer, addr: p.addr, dist: p.dist,
-                                amt: data.order.amount, customer_dist: p.customer_dist, warehouse_dist: p.warehouse_dist,
-                                items: data.order.items
-                            };
-                            console.log("active order updated",state.activeOrder);
-                            
-                            state.odStep = 0;
-                            startLocationTracking(state.activeOrder.order_id)
-                            saveSession();
-                            renderHomeStatus();
-                            renderOrderDetail();
-                            showToast('Order accepted — head to pickup');
-                            showScreen('screen-order-detail');
-                        } else {
-                            showToast(data.message || 'Order no longer available');
-                        }
-                    } catch (err) {
-                        console.error(err);
-                        showToast('Something went wrong, please try again');
+                } catch (error) {
+                    console.error('Location error:', error);
+                    showToast('Enable location to accept orders');
+                    if (acceptBtn) {
+                        acceptBtn.disabled = false;
+                        acceptBtn.textContent = 'Accept order';
                     }
-                },
-                (error) => {
-                    console.error(
-                        "Location error:",
-                        error
-                    );
+                    return;
                 }
-            )
+            }
+
+            try {
+                const res = await fetch("/accept_order", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ order_id: p.order_id, driver_coords: { latt: lat, long: long } })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    clearInterval(state.countdownTimer);
+                    hideIncomingSheet();
+
+                    state.activeOrder = {
+                        order_id: data.order.order_id,
+                        id: 'VP' + data.order.token_no,
+                        store: p.store, customer: p.customer, addr: p.addr, dist: p.dist,
+                        amt: data.order.amount, customer_dist: p.customer_dist, warehouse_dist: p.warehouse_dist,
+                        items: data.order.items
+                    };
+
+                    state.odStep = 0;
+                    startLocationTracking(state.activeOrder.order_id);
+                    saveSession();
+                    renderHomeStatus();
+                    renderOrderDetail();
+                    showToast('Order accepted — head to pickup');
+                    showScreen('screen-order-detail');
+                } else {
+                    showToast(data.message || 'Order no longer available');
+                }
+            } catch (err) {
+                console.error(err);
+                showToast('Something went wrong, please try again');
+            } finally {
+                if (acceptBtn) {
+                    acceptBtn.disabled = false;
+                    acceptBtn.textContent = 'Accept order';
+                }
+            }
         }
 
         /* ============================================================
@@ -2575,15 +2667,11 @@
             }, 500);
 
             const coords = state.recent_order;
-            console.log(state);
-
             if (!coords) return;
-            console.log('holla', coords);
-            // ('holla')
+
             const warehouse_marker = L.marker([coords.warehouse_lat, coords.warehouse_lng]).addTo(map);
             state.mapLayers.push(warehouse_marker);
             warehouse_marker.bindPopup("Warehouse").openPopup();
-            console.log("after warehouse");
 
             const customer_marker = L.marker([coords.customer_lat, coords.customer_lng]).addTo(map);
             state.mapLayers.push(customer_marker);
@@ -2596,6 +2684,12 @@
                 [coords.customer_lat, coords.customer_lng]
             ]);
             map.fitBounds(bounds, { padding: [30, 30] });
+
+            // If we already have a live driver fix, keep the live marker/route
+            // visible and correct for the (possibly new) active leg.
+            if (state.lastNavPos) {
+                updateLiveNavigation(state.lastNavPos.lat, state.lastNavPos.lng);
+            }
         }
 
         async function persistStepInBackground(order_id) {
@@ -2614,45 +2708,65 @@
             }
         }
 
-        function openNavigation(lat, lng) {
-            // const url =
-            //     `https://www.google.com/maps/dir/?api=1` +
-            //     `&destination=${lat},${lng}` +
-            //     `&travelmode=driving`;
-            // window.open(url, "_blank");
+        function setMapExpanded(expanded) {
+            const block = document.querySelector('.map-block');
+            if (!block) return;
+            block.classList.toggle('expanded', expanded);
+            const toggleBtn = document.getElementById('mapExpandToggle');
+            if (toggleBtn) toggleBtn.title = expanded ? 'Collapse map' : 'Expand map';
+            // Leaflet needs a size recalculation once the CSS height
+            // transition finishes, or the tiles render clipped/blank.
+            setTimeout(() => map.invalidateSize(), 380);
+        }
+
+        function toggleMapExpanded() {
+            const block = document.querySelector('.map-block');
+            setMapExpanded(!block.classList.contains('expanded'));
         }
 
         function handleActionButton() {
-            console.log("in handle action button");
-            
             const c = state.recent_order;
             if (!c || !state.activeOrder) return;
 
             if (state.odStep === 3) {
-                navigator.geolocation.clearWatch(locationWatchId);
-                locationWatchId = null;
+                if (locationWatchId !== null) {
+                    navigator.geolocation.clearWatch(locationWatchId);
+                    locationWatchId = null;
+                }
+                setMapExpanded(false);
                 document.getElementById('deliveryOtpOverlay').classList.add('show');
                 setTimeout(() => document.querySelector('#deliveryOtpOverlay .otp-box').focus(), 150);
                 return;
             }
 
+            // Steps 0 and 2 are "Navigate to pickup/drop" — the driver is
+            // about to actively navigate, so grow the map. Steps 1 and 3
+            // are "Confirm pickup/delivery" — navigation is done, so shrink
+            // it back down to show order/customer details.
+            const wasNavigating = (state.odStep === 0 || state.odStep === 2);
+
             let destination = null;
             if (state.odStep === 0) destination = [c.warehouse_lat, c.warehouse_lng];
             if (state.odStep === 2) destination = [c.customer_lat, c.customer_lng];
 
-            // Update UI + persist BEFORE handing off to the Maps app — mobile
-            // browsers can suspend/reload this tab while Maps has focus, so we
-            // can't rely on anything async running after window.open().
             state.odStep++;
-            // startLocationTracking(state.activeOrder.order_id)
             saveSession();
             renderHomeStatus();
             renderOrderDetail();
             if (state.odStep === 3) showToast('Arrived at drop location');
-            console.log(state.activeOrder)
             persistStepInBackground(state.activeOrder.order_id);
 
-            if (destination) openNavigation(destination[0], destination[1]);
+            setMapExpanded(wasNavigating);
+
+            // In-app navigation: focus the embedded map on the destination
+            // and (re)draw the live route from the driver's last known
+            // position, instead of handing off to an external maps app.
+            if (destination) {
+                map.flyTo(destination, 16, { animate: true, duration: 0.8 });
+                if (state.lastNavPos) {
+                    drawLiveRoute(state.lastNavPos.lat, state.lastNavPos.lng, destination[0], destination[1]);
+                }
+            }
         }
 
         function dOtpMove(el, idx) {
@@ -2662,6 +2776,23 @@
 
         function closeDeliveryOtp() {
             document.getElementById('deliveryOtpOverlay').classList.remove('show');
+        }
+
+        function clearLiveNavigationLayers() {
+            if (state.driverLiveMarker) {
+                map.removeLayer(state.driverLiveMarker);
+                state.driverLiveMarker = null;
+            }
+            if (state.driverLiveRoute) {
+                map.removeLayer(state.driverLiveRoute);
+                state.driverLiveRoute = null;
+            }
+            state.lastNavPos = null;
+            state.lastRouteCalcAt = 0;
+            if (state.navAnimFrame) {
+                cancelAnimationFrame(state.navAnimFrame);
+                state.navAnimFrame = null;
+            }
         }
 
         async function confirmDelivery() {
@@ -2694,10 +2825,11 @@
                 document.getElementById('statEarnings').textContent = '₹' + state.earningsToday;
                 document.getElementById('statOrders').textContent = state.ordersToday;
                 document.getElementById('earnHeroAmt').textContent = '₹' + state.earningsToday;
-                // document
+
                 state.activeOrder = null;
                 state.odStep = 0;
                 clearSession();
+                clearLiveNavigationLayers();
                 renderHomeStatus();
                 showScreen('main-app');
                 switchTab('home');
@@ -2738,6 +2870,93 @@
             }
         }
 
+        /* ============================================================
+           LIVE IN-APP NAVIGATION
+           A green marker tracks the driver's live position on the same
+           embedded map, with a route recalculated (throttled) from that
+           position to whichever leg is currently active — replacing the
+           old external "open Google Maps" hand-off entirely.
+           ============================================================ */
+        function getCurrentDestination() {
+            const c = state.recent_order;
+            if (!c) return null;
+            return state.odStep < 2
+                ? { lat: c.warehouse_lat, lng: c.warehouse_lng }
+                : { lat: c.customer_lat, lng: c.customer_lng };
+        }
+
+        function animateLiveMarker(marker, from, to) {
+            if (!from) {
+                marker.setLatLng(to);
+                return;
+            }
+
+            if (state.navAnimFrame) {
+                cancelAnimationFrame(state.navAnimFrame);
+            }
+
+            const startTime = performance.now();
+            const duration = 1500;
+
+            function step(now) {
+                const progress = Math.min((now - startTime) / duration, 1);
+                const lat = from.lat + (to.lat - from.lat) * progress;
+                const lng = from.lng + (to.lng - from.lng) * progress;
+                marker.setLatLng([lat, lng]);
+
+                if (progress < 1) {
+                    state.navAnimFrame = requestAnimationFrame(step);
+                }
+            }
+
+            state.navAnimFrame = requestAnimationFrame(step);
+        }
+
+        async function drawLiveRoute(fromLat, fromLng, toLat, toLng) {
+            const url =
+                `https://router.project-osrm.org/route/v1/driving/` +
+                `${fromLng},${fromLat};${toLng},${toLat}` +
+                `?overview=full&geometries=geojson`;
+
+            try {
+                const response = await fetch(url);
+                const result = await response.json();
+                if (!result.routes || !result.routes.length) return;
+
+                const coords = result.routes[0].geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+
+                if (!state.driverLiveRoute) {
+                    state.driverLiveRoute = L.polyline(coords, { color: '#3ED598', weight: 5, opacity: 0.9 }).addTo(map);
+                } else {
+                    state.driverLiveRoute.setLatLngs(coords);
+                }
+            } catch (err) {
+                console.error('drawLiveRoute failed', err);
+            }
+        }
+
+        function updateLiveNavigation(lat, lng) {
+            const dest = getCurrentDestination();
+            if (!dest) return;
+
+            const newPos = L.latLng(lat, lng);
+
+            if (!state.driverLiveMarker) {
+                state.driverLiveMarker = L.marker(newPos, {
+                    icon: L.divIcon({ className: 'driver-live-dot', html: '', iconSize: [16, 16] })
+                }).addTo(map).bindPopup('You');
+            } else {
+                animateLiveMarker(state.driverLiveMarker, state.lastNavPos, newPos);
+            }
+            state.lastNavPos = newPos;
+
+            const now = Date.now();
+            if (now - state.lastRouteCalcAt > 8000) {
+                state.lastRouteCalcAt = now;
+                drawLiveRoute(lat, lng, dest.lat, dest.lng);
+            }
+        }
+
         function load_order_items(items) {
             const itemsList = document.getElementById("odItems");
             itemsList.innerHTML = "";
@@ -2745,7 +2964,7 @@
             document.getElementById('odItemCount').textContent = entries.length + ' item' + (entries.length === 1 ? '' : 's');
             for (const [name, qty] of entries) {
                 const li = document.createElement("li");
-                li.innerHTML = `<span>${name}</span><span>×${qty}</span>`;
+                li.innerHTML = `<span>${escapeHtml(name)}</span><span>×${escapeHtml(qty)}</span>`;
                 itemsList.appendChild(li);
             }
         }
@@ -2770,8 +2989,7 @@
                     body: JSON.stringify({ range })
                 });
                 const data = await res.json();
-                console.log(data);
-                
+
                 if (!data.success || !data.history.length) {
                     list.innerHTML = '<div style="text-align:center; padding:20px; color:var(--slate);">No orders yet</div>';
                     return;
@@ -2780,12 +2998,12 @@
                 list.innerHTML = data.history.map(h => `
     <div class="history-row">
       <div class="route-mini">
-        <div class="id">#${h.id}</div>
-        <div class="path">${h.path}</div>
-        <div class="time">${h.time}</div>
+        <div class="id">#${escapeHtml(h.id)}</div>
+        <div class="path">${escapeHtml(h.path)}</div>
+        <div class="time">${escapeHtml(h.time)}</div>
       </div>
       <div class="amt">
-        <div class="n">₹${h.amt}</div>
+        <div class="n">₹${escapeHtml(h.amt)}</div>
         <span class="badge ${h.status === 'delivered' ? 'badge-green' : 'badge-danger'}" style="margin-top:4px; display:inline-block;">${h.status === 'delivered' ? 'Delivered' : 'Cancelled'}</span>
       </div>
     </div>
@@ -2814,7 +3032,7 @@
                     wrap.innerHTML = days.map(d => `
     <div class="bar-col ${d.date === todayStr ? 'today' : ''}">
       <div class="bar" style="height:${(d.v / max * 100).toFixed(0)}%;"></div>
-      <div class="lbl">${d.l}</div>
+      <div class="lbl">${escapeHtml(d.l)}</div>
     </div>
   `).join('');
                 } else {
@@ -2870,7 +3088,9 @@
                     let lng = position.coords.longitude;
                     lat = 17.388879
                     lng = 78.428223
-                    console.log(lat, lng);
+                    // Cache this fix so acceptOrder() can reuse it instantly
+                    // instead of forcing a brand-new GPS lookup.
+                    state.lastKnownPosition = { lat, lng, ts: Date.now() };
 
                     try {
                         const res = await fetch("/partner_online", {
@@ -2884,7 +3104,7 @@
                             showToast('Failed to go online, try again');
                         }
                     } catch (error) {
-                        console.log("error", error.message);
+                        console.error("error", error.message);
                     }
                 },
                 (error) => {
@@ -2897,9 +3117,8 @@
                 }
             );
         }
-        
+
         let locationWatchId = null;
-        let lastLocationSent = 0;
         function startLocationTracking(orderId) {
             if (locationWatchId !== null) {
                 return; // already tracking
@@ -2907,20 +3126,19 @@
 
             locationWatchId = navigator.geolocation.watchPosition(
                 (position) => {
-                    const now = Date.now();
-                    console.log("postion obtained",position)
-                    // Send at most once every 3 seconds
-                    // if (now - lastLocationSent < 3000) {
-                    //     return;
-                    // }
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
 
-                    lastLocationSent = now;
+                    state.lastKnownPosition = { lat, lng, ts: Date.now() };
 
                     socket.emit("driver_location", {
                         order_id: orderId,
-                        lat: position.coords.latitude,
-                        lng: position.coords.longitude
+                        lat: lat,
+                        lng: lng
                     });
+
+                    // Drive the in-app live navigation view too.
+                    updateLiveNavigation(lat, lng);
                 },
                 (error) => {
                     console.error("GPS error:", error);
@@ -2932,7 +3150,7 @@
                 }
             );
         }
-        
+
     </script>
 </body>
 
