@@ -121,6 +121,8 @@ socket.on("driver_assigned", (data) => {
         card.querySelector(".order-header .order-status").style.color = "blanchedalmond";
 
         const cancelBtn = card.querySelector("#controlBtn .cancelBtn");
+        console.log(cancelBtn);
+
         if (cancelBtn) {
             cancelBtn.style.display = "none";
         }
@@ -358,7 +360,8 @@ async function updateDriverRoute(driverLat, driverLng) {
     if (!warehouseMarker) {
         return;
     }
-
+    console.log("in update route");
+    
     const warehousePosition = warehouseMarker.getLatLng();
 
     const warehouseLatVal = warehousePosition.lat;
@@ -455,11 +458,20 @@ async function loadOrders() {
                     <span>₹${itemTotal}</span>
                 </div>`;
         });
-
+        let final_btn = null
+        if (order.delivery_status !== "searching"&&order.delivery_status !== "delivered" ) {
+            console.log(order);
+            
+            final_btn = `<button class="TrackOrderBtn statusBtn" style="opacity: 1;cursor: pointer;visibility: visible;display: inline-block;" data-warehouse_lat=${order.warehouse_coords.latt} data-warehouse_lng=${order.warehouse_coords.long} data-driver_lat=${order.driver_coords.latt} data-driver_lng=${order.driver_coords.long}>Track Driver</button>`
+        }
+        else {
+            final_btn = `<button class="cancelBtn statusBtn" style="...">Cancel Order</button>`
+            final_btn.add
+        }
         htmlParts.push(`
             <div class="order-card" user_id=${order.user_id}>
                 <div class="order-header">
-                    <span class="order-id" id=${order.user_order_id}>#${order.order_id}</span>
+                    <span class="order-id" id=${order.order_id}>#${order.order_id}</span>
                     <span class="order-status status-${order.status}">${order.status}</span>
                 </div>
                 <div class="token-no">Token No: ${order.token_no}</div>
@@ -468,7 +480,7 @@ async function loadOrders() {
                 <div class="total">Total: ₹${total}</div>
                 <div id=controlBtn>
                 <button class="completeBtn statusBtn" style="...">Completed</button>
-                <button class="cancelBtn statusBtn" style="...">Cancel Order</button>
+                ${final_btn}
                 </div>
             </div>
         `);
@@ -704,6 +716,31 @@ document.addEventListener("click", async (e) => {
             alert("failed updating status")
         }
     }
+    if (e.target.classList.contains("TrackOrderBtn")) {
+        const card = e.target.closest(".order-card");
+        const item = card.querySelector(".item");
+
+        // 🔥 select BOTH buttons inside this card
+        const buttons = card.querySelectorAll(".statusBtn");
+
+        const orderId = card
+            .querySelector(".order-id")
+            .textContent.replace("#", "");
+        const trackBtn = e.target;
+        console.log(trackBtn.dataset);
+        
+        const driverLat = Number(trackBtn.dataset.driver_lat);
+        const driverLng = Number(trackBtn.dataset.driver_lng);
+
+        const warehouseLat = Number(trackBtn.dataset.warehouse_lat);
+        const warehouseLng = Number(trackBtn.dataset.warehouse_lng);
+
+        console.log("Driver:", driverLat, driverLng);
+        console.log("Warehouse:", warehouseLat, warehouseLng);
+
+        // your tracking code here
+        trackDriver(card,trackBtn)
+    }
 });
 document.getElementById("backBtn").addEventListener("click", () => {
     document.getElementById("map-block").classList.remove("active")
@@ -727,3 +764,123 @@ overlay.addEventListener("click", () => {
     sidebar.style.display = "none"
     sidebar.classList.remove("show")
 })
+
+async function trackDriver(card, trackBtn) {
+    const orderid = card
+        .querySelector(".order-id")
+        .getAttribute("id");
+
+    trackingOrderId = orderid;
+
+    console.log("Tracking order:", trackingOrderId);
+
+    socket.emit("track_order", {
+        order_id: trackingOrderId
+    });
+
+    document.getElementById("map-block").classList.add("active");
+
+    // ------------------------------------------------
+    // Coordinates from Track Driver button
+    // ------------------------------------------------
+    
+    const driverLat = Number(trackBtn.dataset.driver_lat);
+    const driverLng = Number(trackBtn.dataset.driver_lng);
+
+    const warehouseLatVal = Number(trackBtn.dataset.warehouse_lat);
+    const warehouseLngVal = Number(trackBtn.dataset.warehouse_lng);
+
+    warehouseLat = warehouseLatVal;
+    warehouseLng = warehouseLngVal;
+
+    // ------------------------------------------------
+    // Initialize map only once
+    // ------------------------------------------------
+
+    if (!map) {
+        map = L.map("map");
+
+        L.tileLayer(
+            "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+            { attribution: "© OpenStreetMap contributors" }
+        ).addTo(map);
+    }
+
+    // ------------------------------------------------
+    // Warehouse marker
+    // ------------------------------------------------
+
+    if (!warehouseMarker) {
+        warehouseMarker = L.marker([warehouseLat, warehouseLng])
+            .addTo(map)
+            .bindPopup("Warehouse");
+    } else {
+        warehouseMarker.setLatLng([warehouseLat, warehouseLng]);
+    }
+
+    // ------------------------------------------------
+    // Route line
+    // ------------------------------------------------
+
+    if (!driverRouteLine) {
+        driverRouteLine = L.polyline([], {
+            weight: 5,
+            opacity: 0.8
+        }).addTo(map);
+    }
+
+    // ------------------------------------------------
+    // Resize map
+    // ------------------------------------------------
+
+    setTimeout(() => {
+        map.invalidateSize();
+    }, 300);
+
+    // ------------------------------------------------
+    // Existing driver location
+    // ------------------------------------------------
+
+    if (currentDriverPosition) {
+
+        await updateDriverRoute(
+            currentDriverPosition.lat,
+            currentDriverPosition.lng
+        );
+
+        map.fitBounds(
+            L.latLngBounds([
+                warehouseMarker.getLatLng(),
+                currentDriverPosition
+            ]),
+            { padding: [40, 40] }
+        );
+
+    } else {
+
+        currentDriverPosition = L.latLng(
+            driverLat,
+            driverLng
+        );
+
+        await updateDriverRoute(
+            driverLat,
+            driverLng
+        );
+
+        driverMarker = L.marker([
+            driverLat,
+            driverLng
+        ])
+            .addTo(map)
+            .bindPopup("Driver");
+
+        map.fitBounds(
+            L.latLngBounds([
+                warehouseMarker.getLatLng(),
+                currentDriverPosition
+            ]),
+            { padding: [40, 40] }
+        );
+    }
+}

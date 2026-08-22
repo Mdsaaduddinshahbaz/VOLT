@@ -858,23 +858,24 @@ def store_order():
     try:
         result = store_orders(user_id, coordinates)
         print(result)
+
         if result == 404:
             return jsonify({"success": False, "message": "Cart is empty"}), 400
         if result is False:
             return jsonify({"success": False, "message": "Unable to place order, please try again"}), 500
-        #print("after result",result)
-        seller_order_ids,user_order_id = result
+        if not result.get("success"):
+            return jsonify({"success": False, "message": result.get("message", "Unable to place order")}), 400
+
+        seller_order_id = result["order_id"]
         socketio.emit("new_order", {"msg": "refresh"}, room="warehouse")
 
-       
         # print("resid",res_id)
         # res_location = get_restaurant_location(res_id)
-        res_location={"lat": 17.39532841640067, "lng": 78.43148662789395}
+        res_location = {"lat": 17.39532841640067, "lng": 78.43148662789395}
         if res_location:
-             search_driver.delay(res_location, username, coordinates, user_order_id, 10)
+            search_driver.delay(res_location, username, coordinates, seller_order_id, 10)
         #print("/store_order completed at",time.perf_counter()-start)
-        seller_order_id = str(seller_order_ids[0])
-        return jsonify({"success": True,"id":seller_order_id})
+        return jsonify({"success": True, "id": seller_order_id})
     except Exception as e:
         #print(e)
         return jsonify({"success": False}), 500

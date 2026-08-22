@@ -2691,6 +2691,13 @@
                 updateLiveNavigation(state.lastNavPos.lat, state.lastNavPos.lng);
             }
         }
+        function openNavigation(lat, lng) {
+            const url =
+                `https://www.google.com/maps/dir/?api=1` +
+                `&destination=${lat},${lng}` +
+                `&travelmode=driving`;
+            window.open(url, "_blank");
+        }
 
         async function persistStepInBackground(order_id) {
             try {
@@ -2748,7 +2755,9 @@
             let destination = null;
             if (state.odStep === 0) destination = [c.warehouse_lat, c.warehouse_lng];
             if (state.odStep === 2) destination = [c.customer_lat, c.customer_lng];
-
+            // openNavigation()
+            if(state.odStep===0||state.odStep===2)
+            openNavigation(destination[0],destination[1])
             state.odStep++;
             saveSession();
             renderHomeStatus();
@@ -2756,7 +2765,7 @@
             if (state.odStep === 3) showToast('Arrived at drop location');
             persistStepInBackground(state.activeOrder.order_id);
 
-            setMapExpanded(wasNavigating);
+            setMapExpanded(false);
 
             // In-app navigation: focus the embedded map on the destination
             // and (re)draw the live route from the driver's last known

@@ -811,7 +811,7 @@ function renderOrders(
 
             const cart =
                 order.items?.items ||
-                order.resturants.items ||
+                order.items ||
                 {};
             console.log(cart);
 
