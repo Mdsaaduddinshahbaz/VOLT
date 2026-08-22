@@ -3,7 +3,73 @@
 // that's already been sent if a newer batch needs to go out before the old one resolves.
 let pendingUpdates = new Map();       // itemId -> { timer, accumulatedDelta }
 let inFlightControllers = new Map();  // itemId -> AbortController
+let map;
+let marker;
+let userLatt = null;
+let userLong = null;
+let currentAddress = document.getElementById("currentAddress");
+const cancelbtn = document.getElementById("closeModal");
+// const loading_container = document.getElementById("loading_container");
+function addListenerOnce(el, event, handler) {
+    if (!el) return;
+    const key = `bound_${event}`;
+    if (el.dataset[key]) return;
+    el.dataset[key] = "true";
+    el.addEventListener(event, handler);
+}
+function getPosition() {
+    return new Promise((resolve, reject) => {
+        if (!navigator.geolocation) {
+            reject("Geolocation is not supported by your browser");
+            return; // bugfix: without this, code fell through and called
+                     // navigator.geolocation.getCurrentPosition on undefined
+        }
+        navigator.geolocation.getCurrentPosition(resolve, reject);
+    });
+}
+async function getLocation() {
+    currentAddress = document.getElementById("currentAddress");
+    if (!currentAddress || !map) return;
+    if (!navigator.geolocation) return;
 
+    navigator.geolocation.getCurrentPosition(
+        async (position) => {
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+            try {
+                const address = await reverseGeocode(lat, lng);
+                currentAddress.dataset.long = lng;
+                currentAddress.dataset.lat = lat;
+                currentAddress.textContent = address;
+                localStorage.setItem("currentAddress", address);
+                const userLocation = { latt: lat, long: lng };
+                localStorage.setItem("userLocation", JSON.stringify(userLocation));
+                map.setView([lat, lng], 15);
+                if (marker) marker.setLatLng([lat, lng]); else marker = L.marker([lat, lng]).addTo(map);
+            } catch (e) {
+                console.error("getLocation reverse geocode failed", e);
+            }
+        },
+        () => alert("Location access denied")
+    );
+}
+async function reverseGeocode(lat, lon) {
+    const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`
+    );
+    if (!response.ok) throw new Error(`reverseGeocode failed: ${response.status}`);
+    const data = await response.json();
+    // return data.display_name;
+    return data.display_name.split(',').slice(0, 2).join(',');
+}
+if (map) { try { map.remove(); } catch (e) { } }
+marker = null; // bugfix: old marker belonged to the removed map instance
+map = L.map('map').setView([17.3850, 78.4867], 13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap'
+}).addTo(map);
+const livelocationBtn = document.getElementById("liveLocationBtn");
+const maps_btn = document.getElementById("map_btn");
 // Basic HTML-escaping so item names/prices/urls from the API can never break
 // out of the markup they're injected into (XSS guard).
 function escapeHtml(str) {
@@ -73,7 +139,132 @@ function scheduleCartUpdate(itemId, userId, delta, qtyEl, onSuccess, onFailure) 
         }
     }, 400); // debounce window — tune to taste (300-500ms feels good)
 }
+const trigger = document.getElementById("locationTrigger");
+    const box = document.getElementById("locationBox");
+    const overlay = document.getElementById("locationOverlay");
+    addListenerOnce(trigger, "click", () => {
+        box.classList.add("show");
+        overlay.classList.add("show");
+        savedAddress.classList.add("show");
+        document.getElementById("addressInput").focus();
+    });
+    addListenerOnce(overlay, "click", () => {
+        box.classList.remove("show");
+        overlay.classList.remove("show");
+    });
 
+    addListenerOnce(suggestions, "click", (e) => {
+        const item = e.target.closest(".suggestion-item");
+        if (!item) return;
+        document.getElementById("currentAddress").textContent = item.dataset.address;
+        localStorage.setItem("selectedAddress", item.dataset.address);
+        document.getElementById("addressTagModal").classList.add("show");
+        box.classList.remove("show");
+        overlay.classList.remove("show");
+        // change(parseFloat(item.dataset.lat), parseFloat(item.dataset.lon));
+    });
+
+    document.querySelectorAll(".tag-btn").forEach(btn => {
+        addListenerOnce(btn, "click", async () => {
+            const addressType = btn.dataset.tag;
+            const address = document.getElementById("currentAddress").textContent;
+            const address_latt = document.getElementById("currentAddress").dataset.lat;
+            const address_long = document.getElementById("currentAddress").dataset.long;
+            const cordinates = { latt: address_latt, long: address_long };
+            console.log(cordinates);
+            
+            document.getElementById("addressTagModal").classList.remove("show");
+            try {
+                const res = await fetch("/save_address", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ address: address, address_type: addressType, cordinates: cordinates })
+                });
+                const data=await res.json()
+                console.log(data,res);
+                if (!res.ok) throw new Error(`save_address failed: ${res.status}`);
+                
+            } catch (err) {
+                console.error("save_address failed", err);
+            }
+            currentAddress.textContent = addressType + " - " + address;
+        });
+    });
+     const searchInput = document.getElementById("searchInput");
+    searchInput.addEventListener("input", () => {
+        const searchTerm = searchInput.value.toLowerCase();
+        document.querySelectorAll(".card").forEach(card => {
+            const restaurantName = card.querySelector(".resturant_name").textContent.toLowerCase();
+            card.style.display = restaurantName.includes(searchTerm) ? "block" : "none";
+        });
+    });
+    addListenerOnce(livelocationBtn, "click", async () => {
+        // console.log("in live location btn");
+        
+        box.classList.remove("show");
+        // loading_container.classList.add("show");
+        try {
+            const livelctn = await getPosition();
+            const address = await reverseGeocode(livelctn.coords.latitude, livelctn.coords.longitude);
+            const userLocation = { latt: livelctn.coords.latitude, long: livelctn.coords.longitude };
+            localStorage.setItem("userLocation", JSON.stringify(userLocation));
+            currentAddress.textContent=address
+            currentAddress.dataset.long=livelctn.coords.longitude
+            currentAddress.dataset.lat=livelctn.coords.latitude
+            // await change(livelctn.coords.latitude, livelctn.coords.longitude);
+            // document.getElementById("addressTagModal").classList.add("show");
+        } catch (err) {
+            console.error("live location failed", err);
+            alert("Location access denied");
+        } finally {
+            
+            document.getElementById("addressTagModal").classList.add("show");
+            // loading_container.classList.remove("show");
+            overlay.classList.remove("show");
+        }
+    });
+
+    const map_container = document.getElementById("map_container");
+    map.on('click', async (e) => {
+        const { lat, lng } = e.latlng;
+        try {
+            const address = await reverseGeocode(lat, lng);
+            currentAddress.dataset.long = lng;
+            currentAddress.dataset.lat = lat;
+            currentAddress.textContent = address;
+            // await change(lat, lng);
+            // localStorage.setItem("currentAddress", address);
+            localStorage.setItem("selectedAddress",address)
+            const userLocation = { latt: lat, long: lng };
+            localStorage.setItem("userLocation", JSON.stringify(userLocation));
+            document.getElementById("addressTagModal").classList.add("show");
+        } catch (err) {
+            console.error("map click reverse geocode failed", err);
+        }
+        if (marker) marker.setLatLng(e.latlng); else marker = L.marker(e.latlng).addTo(map);
+        setTimeout(() => {
+            box.classList.remove("show");
+            overlay.classList.remove("show");
+            maps_btn.setAttribute("is_active", false);
+            map_container.style.display = "none";
+            map_container.style.position = "absolute";
+        }, 1000);
+    });
+
+    addListenerOnce(maps_btn, "click", async () => {
+        if (maps_btn.getAttribute("is_active") === "false") {
+            maps_btn.setAttribute("is_active", true);
+            map_container.style.display = "block";
+            map_container.style.position = "relative";
+            savedAddress.classList.remove("show");
+            setTimeout(() => { map.invalidateSize(); }, 100);
+            await getLocation();
+        } else {
+            maps_btn.setAttribute("is_active", false);
+            map_container.style.display = "none";
+            map_container.style.position = "absolute";
+        }
+    });
 function mergeMenuWithCart(data, datas, res_id) {
     const cartItems =
         datas?.results?.items || {};
@@ -133,7 +324,17 @@ async function initHomePage() {
         // res_location.innerText = addresss_decoded;
         // heading.innerText = decoded;
         console.log("befor get_Cart");
-        
+        let selected_location=null
+        if(localStorage.getItem("userLocation")){
+            if(localStorage.getItem("selectedAddress")){
+                let userLoc=JSON.parse(localStorage.getItem("userLocation"))
+                console.log(userLoc);
+                
+                currentAddress.textContent=localStorage.getItem("selectedAddress")
+                currentAddress.dataset.long=userLoc.long
+                currentAddress.dataset.lat=userLoc.latt
+            }
+        }
         const rest = await fetch("/get_cart_items", {
             method: "POST",
             headers: { "Content-type": "application/json" },
@@ -316,7 +517,9 @@ async function initHomePage() {
                 alert("Something went wrong adding this item. Please try again.");
             }
         });
-
+        addListenerOnce(cancelbtn, "click", () => {
+        document.getElementById("addressTagModal").classList.remove("show");
+    });
         const replaceYesBtn = document.getElementById("YES");
         replaceYesBtn.addEventListener("click", async () => {
             if (!pendingCartItem) return;
@@ -477,6 +680,7 @@ async function initHomePage() {
         });
     // });
 }
+// document.addEventListener
 // addListenerOnce(cartBtn, "click", () => { window.location.href = `/cart/${userId}`; });
 // addListenerOnce(orderBtn, "click", () => { window.location.href = `/orders/${userId}`; });
 initHomePage()

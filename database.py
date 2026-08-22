@@ -234,7 +234,7 @@ def stores_orders(userid, coordinates):
     start=time.perf_counter()
     token="123"
     items = get_cart(userid)
-    print("items",items)
+    print("items1",items)
     if not items or not items.get("cart"):
         return 404
 
@@ -361,7 +361,7 @@ def stores_orders(userid, coordinates):
 
     return False
 def store_orders(userid, coordinates):
-    # #print("in store_orders db")
+    print("in store_orders db")
     # token = generate_token()
     ##print("in store orders db")
 
@@ -586,7 +586,6 @@ def store_orders(userid, coordinates):
             # )
 
             return (
-                restaurant_ids,
                 seller_order_ids,
                 parent
             )

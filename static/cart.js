@@ -1,3 +1,5 @@
+let pendingUpdatess = new Map();       // itemId -> { timer, accumulatedDelta }
+let inFlightControllerss = new Map();
 function getPosition() {
     return new Promise((resolve, reject) => {
         if (!navigator.geolocation) {
@@ -20,7 +22,63 @@ async function reverseGeocode(lat, lon) {
     return `${address.suburb || ""}, ${address.city || address.town || ""}`;
 }
 
+function scheduleCartUpdate(itemId, userId, delta, qtyEl, onSuccess, onFailure) {
+    let entry = pendingUpdatess.get(itemId);
 
+    if (entry) {
+        // Fold this click into the pending batch
+        entry.accumulatedDelta += delta;
+        clearTimeout(entry.timer);
+    } else {
+        entry = { accumulatedDelta: delta, timer: null };
+        pendingUpdatess.set(itemId, entry);
+    }
+
+    entry.timer = setTimeout(async () => {
+        const netDelta = entry.accumulatedDelta;
+        pendingUpdatess.delete(itemId); // clear before await so new clicks start a fresh batch
+
+        // Clicks cancelled each other out (e.g. +1 then -1) — UI is already correct
+        // from the optimistic updates, nothing to send to the server.
+        if (netDelta === 0) return;
+
+        // Cancel any older in-flight request for this item so responses can't race.
+        inFlightControllerss.get(itemId)?.abort();
+        const controller = new AbortController();
+        inFlightControllerss.set(itemId, controller);
+
+        try {
+            const res = await fetch("/update_cart", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ user_id: userId, item_id: itemId, qty: netDelta }),
+                signal: controller.signal
+            });
+            console.log(res);
+
+            if (!res.ok) throw new Error(`update_cart failed: ${res.status}`);
+            const data = await res.json();
+            console.log(data)
+
+            if (data.success) {
+                onSuccess(data);
+            } else {
+                onFailure(data.message || "Failed updating cart");
+            }
+        } catch (err) {
+            console.log(err);
+
+            if (err.name !== "AbortError") {
+                console.error("cart update failed", err);
+                onFailure("Network error");
+            }
+        } finally {
+            if (inFlightControllerss.get(itemId) === controller) {
+                inFlightControllerss.delete(itemId);
+            }
+        }
+    }, 400); // debounce window — tune to taste (300-500ms feels good)
+}
 async function initCartPage() {
 
     const cart_items_container =
@@ -497,62 +555,114 @@ async function initCartPage() {
                     "increase"
                 )
             ) {
-
-                const res =
-                    await fetch(
-                        "/update_cart",
-                        {
-                            method: "POST",
-
-                            headers: {
-                                "Content-Type":
-                                    "application/json"
-                            },
-
-                            body: JSON.stringify({
-                                user_id: userId,
-                                item_id: itemId,
-                                qty: 1
-                            })
-                        }
-                    );
-
-
-                const data =
-                    await res.json();
-
-
-                if (data.success) {
-
-                    item_qty.innerText =
-                        currentQty + 1;
-
-
-                    item_price.innerText =
-                        currentPrice + unitprice;
-
-
-                    totalPrice.innerText =
-                        totalprice + unitprice;
-
-
-                    toPay.innerText =
-                        topay + unitprice;
-
-
-                    syncCartCacheQty(
-                        itemId,
-                        1,
-                        unitprice
-                    );
-
-                } else {
-
-                    alert(
-                        "failed adding item"
-                    );
-
+                const qtyEl = e.target.parentElement.querySelector('.item_qty');
+                const prevQty = Number(qtyEl.textContent);
+                console.log(qtyEl, prevQty);
+                if (prevQty + 1 > item_qty) {
+                    alert(`only ${item_qty} in stock`);
+                    return;
                 }
+                qtyEl.textContent = prevQty + 1;
+                scheduleCartUpdate(itemId, userId, +1, qtyEl,
+                    (data) => {
+                        if (data.total > 0) {
+                            item_qty.innerText =
+                                currentQty + 1;
+
+
+                            item_price.innerText =
+                                currentPrice + unitprice;
+
+
+                            totalPrice.innerText =
+                                totalprice + unitprice;
+
+
+                            toPay.innerText =
+                                topay + unitprice;
+
+
+                            syncCartCacheQty(
+                                itemId,
+                                1,
+                                unitprice
+                            );
+                            // footer.classList.add("show");
+                            // current_total_amount.innerText = data.total;
+                        } else {
+                            // footer.classList.remove("show");
+                        }
+                        // bugfix: removal is now driven only by the server response
+                        // (data.removed), not inferred from the optimistic qtyEl
+                        // text — previously both an optimistic AND a server-driven
+                        // removal path existed and could fight each other.
+                        if (data.removed) {
+                            const qtyControl = e.target.closest('.quantity-control');
+                            if (qtyControl) {
+                                qtyControl.outerHTML = `<button class="add-btn" id="${itemId}">ADD</button>`;
+                            }
+                        }
+                    },
+                    (msg) => {
+                        qtyEl.textContent = prevQty; // rollback on failure
+                        alert(msg);
+                    }
+                );
+                // const res =
+                //     await fetch(
+                //         "/update_cart",
+                //         {
+                //             method: "POST",
+
+                //             headers: {
+                //                 "Content-Type":
+                //                     "application/json"
+                //             },
+
+                //             body: JSON.stringify({
+                //                 user_id: userId,
+                //                 item_id: itemId,
+                //                 qty: 1
+                //             })
+                //         }
+                //     );
+
+
+                // const data =
+                //     await res.json();
+
+
+                // if (data.success) {
+
+                //     item_qty.innerText =
+                //         currentQty + 1;
+
+
+                //     item_price.innerText =
+                //         currentPrice + unitprice;
+
+
+                //     totalPrice.innerText =
+                //         totalprice + unitprice;
+
+
+                //     toPay.innerText =
+                //         topay + unitprice;
+
+
+                //     syncCartCacheQty(
+                //         itemId,
+                //         1,
+                //         unitprice
+                //     );
+
+                // } else {
+
+                //     alert(
+                //         "failed adding item"
+                //     );
+
+                // }
 
             }
 
@@ -772,8 +882,8 @@ async function initCartPage() {
             const data =
                 await res.json();
 
-            console.log(data,restaurants);
-            
+            console.log(data, restaurants);
+
             if (data.success) {
 
                 alert(

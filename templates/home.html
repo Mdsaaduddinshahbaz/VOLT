@@ -96,7 +96,21 @@
         </div>
     </header>
     <div id="spa-content">
+        <div id="addressTagModal" class="modal">
+            <div class="modal-content">
+                <h3>Save Address As</h3>
 
+                <div class="tag-options">
+                    <button class="tag-btn" data-tag="Home">🏠 Home</button>
+                    <button class="tag-btn" data-tag="Work">💼 Work</button>
+                    <button class="tag-btn" data-tag="Other">📍 Other</button>
+                </div>
+
+                <button id="closeModal" class="cancel-btn">
+                    Cancel
+                </button>
+            </div>
+        </div>
         <main class="menu-container">
             <img src="{{ url_for('static', filename='loading-spinner.svg') }}" alt="Loading" id="loading">
             <nav class="breadcrumbs">

@@ -16,7 +16,7 @@ const socket = io({
 let driverMarker = null;
 let warehouseMarker = null;
 let driverRouteLine = null;
-let map = null;
+// let map = null;
 
 let currentDriverPosition = null;
 let animationFrame = null;
@@ -190,8 +190,10 @@ socket.on("driver_assigned", (data) => {
                 // ------------------------------------------------
                 // Initialize map only once
                 // ------------------------------------------------
-
-                if (!map) {
+                console.log("in map");
+                console.log(!map);
+                
+                if (map) {
 
                     map = L.map("map");
 
@@ -204,13 +206,18 @@ socket.on("driver_assigned", (data) => {
                     ).addTo(map);
                 }
 
-
+                console.log("after map");
+                
                 // ------------------------------------------------
                 // Warehouse marker
                 // ------------------------------------------------
 
                 if (!warehouseMarker) {
-
+                    console.log("if ! warehouse");
+                    console.log(warehouseLat,warehouseLng);
+                    console.log("map:", map);
+console.log("map.addLayer:", map?.addLayer);
+console.log("map instanceof Leaflet Map:", map instanceof L.Map);
                     warehouseMarker =
                         L.marker([
                             warehouseLat,
@@ -222,13 +229,15 @@ socket.on("driver_assigned", (data) => {
                             );
 
                 } else {
-
+                    console.log("in else ! warehouse");
+                    
                     warehouseMarker.setLatLng([
                         warehouseLat,
                         warehouseLng
                     ]);
                 }
-
+                console.log("after warehouse");
+                
 
                 // ------------------------------------------------
                 // Route line
@@ -357,7 +366,8 @@ socket.on(
             return;
         }
 
-
+        console.log(lat,lng);
+        
         const newPosition =
             L.latLng(
                 lat,

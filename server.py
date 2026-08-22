@@ -687,7 +687,7 @@ def updateCart():
             return jsonify({"success": False, "message": "qty must be an integer"}), 400
 
         result = update_cart_qty(g.user_id, item_id, qty)
-        print(result)
+        # print(result)
         if result["success"]:
             return jsonify({
                 "success": True,
@@ -857,20 +857,21 @@ def store_order():
 
     try:
         result = store_orders(user_id, coordinates)
-
+        print(result)
         if result == 404:
             return jsonify({"success": False, "message": "Cart is empty"}), 400
         if result is False:
             return jsonify({"success": False, "message": "Unable to place order, please try again"}), 500
-        # #print("after result",result)
-        restaurant_ids, seller_order_ids,user_order_id = result
+        #print("after result",result)
+        seller_order_ids,user_order_id = result
         socketio.emit("new_order", {"msg": "refresh"}, room="warehouse")
 
-        for res_id, seller_order_id in zip(restaurant_ids, seller_order_ids):
-            # #print("resid",res_id)
-            res_location = get_restaurant_location(res_id)
-            if res_location:
-                search_driver.delay(res_location, username, coordinates, user_order_id, 10)
+       
+        # print("resid",res_id)
+        # res_location = get_restaurant_location(res_id)
+        res_location={"lat": 17.39532841640067, "lng": 78.43148662789395}
+        if res_location:
+             search_driver.delay(res_location, username, coordinates, user_order_id, 10)
         #print("/store_order completed at",time.perf_counter()-start)
         seller_order_id = str(seller_order_ids[0])
         return jsonify({"success": True,"id":seller_order_id})

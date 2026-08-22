@@ -969,11 +969,14 @@ hr.item-divider {
     flex-direction: column;
     position: absolute;
     top: calc(100% + 14px);
+    /* height: 65vh; */
+    /* width: 80%; */
     /* left: 0; */
-    width: 380px;
+    /* width: 380px;
     max-width: 88vw;
-    max-height: 78vh;
-    overflow-y: auto;
+    max-height: 78vh; */
+    /* height: max-content; */
+    /* overflow-y: auto; */
     background: var(--white);
     border-radius: var(--radius);
     border: 1px solid var(--line);
@@ -983,10 +986,11 @@ hr.item-divider {
     color: var(--ink);
 }
 
-.location-box.show,
 .location-box.show {
     display: flex;
     z-index: 122;
+    /* height: 65vh; */
+    width: 100%;
 }
 
 #CartOrderContainer.show {

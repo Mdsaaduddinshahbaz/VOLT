@@ -2,7 +2,7 @@ import os
 import json
 import redis
 from dotenv import load_dotenv
-# from celery_worker import celery
+from celery_worker import celery
 from flask_socketio import SocketIO
 
 load_dotenv(override=True)
@@ -693,7 +693,7 @@ def mark_driver_available(driver_id, lat, lng):
 # =========================================================
 
 
-# @celery.task
+@celery.task
 def search_driver(
     res_loc,
     username,
