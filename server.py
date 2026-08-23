@@ -24,8 +24,8 @@ from flask_cors import CORS
 from flask_mail import Mail
 from dotenv import load_dotenv
 from itsdangerous import URLSafeTimedSerializer
-# from verify import upload_image   
-from verifpy1 import upload_image
+from verify import upload_image   
+# from verifpy1 import upload_image
 from functools import wraps
 import jwt
 from datetime import datetime,timedelta
