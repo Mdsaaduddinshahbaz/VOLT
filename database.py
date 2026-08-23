@@ -1201,7 +1201,7 @@ def create_new_driver(email,username, password,role="driver"):
                 "Distance_pay":0,
                 "is_verified":False
             })
-        print(result.acknowledged)
+            
         return ({"success":True,"id":str(result.inserted_id)})
     except Exception as e:
         print("error",str(e))
