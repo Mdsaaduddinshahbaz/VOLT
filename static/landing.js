@@ -8,9 +8,9 @@ function selectRole(role) {
         else{
         window.location.href = "/login/user";  
         } // change route
-      } else {
-        const res_id=localStorage.getItem("res_id")
-        window.location.href=`/login/seller`
+      } else if(role=== 'driver') {
+        // const res_id=localStorage.getItem("res_id")
+        window.location.href=`/driver`
         // if (res_id){
         //   window.location.href=`/seller//${res_id}`
         // }
@@ -18,6 +18,9 @@ function selectRole(role) {
         //   window.location.href = "/login/seller";  
         // } // change route
         // window.location.href = "/seller"; // change route
+      }
+      else{
+        window.location.href=`/login/seller`
       }
     }
     
