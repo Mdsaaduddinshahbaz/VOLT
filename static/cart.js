@@ -1118,3 +1118,5 @@ document.addEventListener(
     }
 );
 
+// document.querySelector(".searchBarContainer").style.display="none"
+

@@ -690,3 +690,5 @@ document.addEventListener("spa:pageload", (e) => {
     console.log(e.detail.page);
     if (e.detail.page === "home") initHomePage()
 });
+
+document.getElementById("searchInput").style.display="block"

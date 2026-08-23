@@ -450,7 +450,7 @@ hr.divider::after { right: -20px; }
 } */
  footer {
     position: sticky;
-    bottom: 13px;
+    bottom: 71px;
 
     /* left: 50%;
     transform: translateX(-50%); */
@@ -883,6 +883,7 @@ hr.item-divider {
 }
 
 #searchBarContainer{
+    display: block !important;
     width: 100%;
 }
 #searchInput{
@@ -1471,4 +1472,9 @@ hr.item-divider {
 #orderBtn i,
 #cartBtn i {
     color: var(--ink);
+}
+
+#searchBarContainer{
+    display: block !important;
+    width: 100%;
 }

@@ -242,7 +242,10 @@
             padding: 0 26px;
             justify-content: center;
         }
-
+        #screen-signup {
+            padding: 0 26px;
+            justify-content: center;
+        }
         .brand {
             display: flex;
             align-items: center;
@@ -1699,7 +1702,39 @@
 
     <div class="phone-frame">
         <div class="app" id="app">
-
+            <!-- ============ Signup ============ -->
+            <section class="screen" id="screen-signup">
+                <div class="statusbar"><span>9:41</span><span class="icons">●●●</span></div>
+                <div class="brand">
+                    <div class="brand-mark">V</div>
+                    <div>
+                        <div class="brand-name">VOLT Partner</div>
+                        <div class="brand-tag">RIDER APP</div>
+                    </div>
+                </div>
+                <div class="auth-title">Let's get you<br>on the road.</div>
+                <div class="auth-sub">Enter your details to create your rider account.</div>
+                <div class="field">
+                    <label for="driverusernameInput">Username</label>
+                    <div class="phone-input-wrap">
+                        <input id="driverusernameInput" type="text" placeholder="John" style="width:100%;">
+                    </div>
+                </div>
+                <div class="field">
+                    <label for="driveremailInput">Email</label>
+                    <div class="phone-input-wrap">
+                        <input id="driveremailInput" type="email" placeholder="you@example.com" autocomplete="username" style="width:100%;">
+                    </div>
+                </div>
+                <div class="field">
+                    <label for="driverpasswordInput">Password</label>
+                    <div class="phone-input-wrap">
+                        <input id="driverpasswordInput" type="password" placeholder="••••••••" autocomplete="current-password" style="width:100%;">
+                    </div>
+                </div>
+                <button class="btn btn-primary" style="width:100%; margin-top:14px;" onclick="signUp()">Sign Up</button>
+                <span class="btn">Already have an account?<a style="color: var(--orange);" id="redirectLogin" onclick="redirect(id)">Log In</a></span>
+            </section>
             <!-- ============ LOGIN ============ -->
             <section class="screen" id="screen-login">
                 <div class="statusbar"><span>9:41</span><span class="icons">●●●</span></div>
@@ -1726,6 +1761,7 @@
                 </div>
                 <button class="btn btn-primary" style="width:100%; margin-top:14px;" onclick="driverLogin()">Log
                     in</button>
+                <span class="btn">Dont have an account?<a style="color: var(--orange);" id="redirectSignup" onclick="redirect(id)">Sign Up</a></span>
             </section>
 
             <!-- ============ MAIN APP ============ -->
@@ -1748,7 +1784,7 @@
                 <main class="content">
 
                     <!-- ---- HOME TAB ---- -->
-                    <section class="tab active" id="tab-home">
+                    <section class="tab" id="tab-home">
                         <div class="stat-row">
                             <div class="stat-card">
                                 <div class="num display-num mono" id="statEarnings">₹0</div>
@@ -2302,6 +2338,8 @@
         }
 
         async function driverLogin() {
+            console.log("clicked");
+            
             const email = document.getElementById('driverEmailInput').value.trim();
             const password = document.getElementById('driverPasswordInput').value;
 
@@ -2309,7 +2347,8 @@
                 showToast('Enter your email and password');
                 return;
             }
-
+            // console.log(holla);
+            
             try {
                 const res = await fetch('/validate_driver', {
                     method: 'POST',
@@ -2338,7 +2377,43 @@
                 showToast('Something went wrong, please try again');
             }
         }
+        async function signUp() {
+            const email = document.getElementById('driveremailInput').value.trim();
+            const password = document.getElementById('driverpasswordInput').value;
+            const username =document.getElementById("driverusernameInput").value.trim();
+            if (!email || !password || !username) {
+                showToast('Enter your email, username and password');
+                return;
+            }
 
+            try {
+                const res = await fetch('/signup_driver', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email,username, password })
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    driver_id = data.driver_id;
+                    document.getElementById('topbarTitle').textContent = 'Hey, ' + username;
+                    document.getElementById('profileName').textContent = username;
+                    document.getElementById('profileAvatar').textContent = (username || '?').slice(0, 2).toUpperCase();
+
+                    socket.connect();
+                    showScreen('main-app');
+                    switchTab('home');
+                    updateOnlineUI();
+                    fetchHomeStats();
+                    renderHomeStatus();
+                } else {
+                    showToast(data.message || 'Signup failed');
+                }
+            } catch (err) {
+                console.error(err);
+                showToast('Something went wrong, please try again');
+            }
+        }
         function logout() {
             fetch('/logout/driver').catch(() => { });
             clearSession();
@@ -3159,7 +3234,15 @@
                 }
             );
         }
-
+        ///////////redirect auth page//////////////
+        function redirect(id){
+            if(id=="redirectLogin"){
+                showScreen("screen-login")
+            }
+            else{
+                showScreen("screen-signup")
+            }
+        }
     </script>
 </body>
 

@@ -28,7 +28,7 @@ function log(...args) {
 let driverMarker = null;
 let warehouseMarker = null;
 let driverRouteLine = null;
-let map = null;
+// let map = null;
 
 let currentDriverPosition = null; // L.LatLng
 let driverRouteCoords = [];        // [[lat,lng], ...] of the *current* OSRM route
@@ -716,3 +716,5 @@ if (backBtn) {
         document.getElementById("map-block").classList.remove("active");
     });
 }
+
+document.getElementById("searchInput").style.display="none"
