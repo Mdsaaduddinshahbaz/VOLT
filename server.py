@@ -2473,7 +2473,7 @@ def set_offline():
 
 
 if __name__ == "__main__":
-    socketio.run(app, debug=True)  # never True once FLASK_ENV=production
+    socketio.run(app, host="0.0.0.0" , port=5000,debug=True)  # never True once FLASK_ENV=production
 # from waitress import serve
 
 # serve(
