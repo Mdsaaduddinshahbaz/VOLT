@@ -1,11 +1,29 @@
+// --------------------------------------------------------------------------
+// SECURITY NOTE (server-side, can't be fixed from this file alone):
+// - "join_seller_room" / "track_order" trust whatever seller_id / order_id
+//   the client sends. Verify server-side that the authenticated seller
+//   actually owns that restaurant/order before joining the room or
+//   streaming location data.
+// - /update_order trusts a client-supplied `user_id` read straight out of a
+//   DOM attribute (fully editable via devtools). Always re-derive the
+//   owning user/seller from the authenticated session on the server, never
+//   from a value the client hands back to you.
+// --------------------------------------------------------------------------
+
 const pathParts = window.location.pathname.split("/");
 
 const resId = pathParts[pathParts.length - 1];
 const type = pathParts[pathParts.length - 4];
-const resname = pathParts[pathParts.length - 2]
-console.log(resId, name, type);
-const filterDropdown = document.getElementById("filterDropdown");
+const resname = pathParts[pathParts.length - 2];
 
+const DEBUG = false; // flip to true only while debugging locally
+function log(...args) {
+    if (DEBUG) console.log(...args);
+}
+
+log(resId, resname, type); // BUG FIX: was `name` (undefined var / window.name), meant `resname`
+
+const filterDropdown = document.getElementById("filterDropdown");
 filterDropdown.addEventListener("change", applyFilter);
 
 // Initial filter when the page loads
@@ -18,23 +36,17 @@ function applyFilter() {
     let hasVisibleCards = false;
 
     cards.forEach(card => {
-        const statusText = card.querySelector(".order-status")
-            .textContent
-            .trim()
-            .toLowerCase();
+        const statusEl = card.querySelector(".order-status");
+        const statusText = statusEl ? statusEl.textContent.trim().toLowerCase() : "";
         const show = selected === "all" || statusText === selected;
 
         card.style.display = show ? "block" : "none";
+        if (show) hasVisibleCards = true;
 
-        if (show) {
-            hasVisibleCards = true;
-        }
         const buttons = card.querySelectorAll(".statusBtn");
-
-        card.style.display = show ? "block" : "none";
+        const enable = selected === "placed";
 
         buttons.forEach(btn => {
-            const enable = selected === "placed";
             btn.disabled = !enable;
             btn.style.opacity = enable ? "1" : "0.5";
             btn.style.cursor = enable ? "pointer" : "not-allowed";
@@ -42,6 +54,7 @@ function applyFilter() {
             btn.style.display = enable ? "inline-block" : "none";
         });
     });
+
     if (hasVisibleCards) {
         noOrdersMessage.style.display = "none";
     } else {
@@ -57,33 +70,74 @@ function applyFilter() {
             noOrdersMessage.textContent = "No orders found.";
         }
     }
-
 }
+
 const ordersList = document.getElementById("orders-list");
 
-console.log(resId)
 const socket = io();
 
 socket.on("connect", () => {
-    console.log("Connected:", socket.id);
-
-    socket.emit("join_seller_room", {
-        seller_id: resId
-    });
+    log("Connected:", socket.id);
+    socket.emit("join_seller_room", { seller_id: resId });
 });
+
 socket.on("new_order", () => {
-    console.log("New order received → reloading...");
-    loadOrders();   // 🔥 call your API again
+    log("New order received → reloading...");
+    loadOrders();
 });
 
 // ============================================================
-// DRIVER TRACKING VARIABLES
+// SMALL UTILITIES (shared shape with the customer-side script)
+// ============================================================
+
+function escapeHtml(value) {
+    if (value === null || value === undefined) return "";
+    return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+// Coordinates show up under different key spellings depending on which
+// part of the backend produced them (lat/lng, lat/long, latt/long...).
+// Normalize once instead of guessing per call site.
+function extractLatLng(coords) {
+    if (!coords) return null;
+
+    const rawLat = coords.lat ?? coords.latt ?? coords.latitude;
+    const rawLng = coords.lng ?? coords.long ?? coords.longitude;
+
+    const lat = Number(rawLat);
+    const lng = Number(rawLng);
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        console.error("Invalid coordinates:", coords);
+        return null;
+    }
+
+    return L.latLng(lat, lng);
+}
+
+function safeNumberAttr(value) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
+}
+
+function getOrderId(card) {
+    return card.querySelector(".order-id")?.dataset.orderId || "";
+}
+
+// ============================================================
+// DRIVER TRACKING STATE
 // ============================================================
 
 let driverMarker = null;
-let map = null
+let map = null;
 let warehouseMarker = null;
 let driverRouteLine = null;
+let driverRouteCoords = []; // [[lat,lng], ...] of the current OSRM route
 
 let currentDriverPosition = null;
 let animationFrame = null;
@@ -92,45 +146,123 @@ let trackingOrderId = null;
 let warehouseLat = null;
 let warehouseLng = null;
 
+const ROUTE_DEVIATION_METERS = 150;
+
+// ============================================================
+// MAP HELPERS (shared between driver_assigned and TrackOrderBtn click)
+// ============================================================
+
+function ensureMapInitialized() {
+    if (!map) {
+        map = L.map("map");
+
+        L.tileLayer(
+            "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+            { attribution: "© OpenStreetMap contributors" }
+        ).addTo(map);
+    }
+
+    setTimeout(() => {
+        if (map) map.invalidateSize();
+    }, 300);
+}
+
+function setWarehouseMarker(latLng) {
+    if (!latLng) return;
+
+    warehouseLat = latLng.lat;
+    warehouseLng = latLng.lng;
+
+    if (!warehouseMarker) {
+        warehouseMarker = L.marker(latLng).addTo(map).bindPopup("Warehouse");
+    } else {
+        warehouseMarker.setLatLng(latLng);
+    }
+}
+
+function setOrCreateDriverMarker(latLng) {
+    if (!driverMarker) {
+        driverMarker = L.marker(latLng).addTo(map).bindPopup("Driver");
+    } else {
+        driverMarker.setLatLng(latLng);
+    }
+    currentDriverPosition = latLng;
+}
+
+function fitMapToDriverAndWarehouse() {
+    if (!warehouseMarker || !currentDriverPosition) return;
+
+    map.fitBounds(
+        L.latLngBounds([warehouseMarker.getLatLng(), currentDriverPosition]),
+        { padding: [40, 40] }
+    );
+}
+
+// Shared entry point for both the inline Track button created in
+// "driver_assigned" and the delegated click handler on rendered cards.
+async function beginTracking(orderId, warehouseCoords, driverCoords) {
+    trackingOrderId = orderId;
+    log("Tracking order:", trackingOrderId);
+
+    socket.emit("track_order", { order_id: trackingOrderId });
+
+    const mapBlock = document.getElementById("map-block");
+    if (mapBlock) mapBlock.classList.add("active");
+
+    ensureMapInitialized();
+
+    const warehouseLatLng = extractLatLng(warehouseCoords);
+    setWarehouseMarker(warehouseLatLng);
+
+    if (!driverRouteLine) {
+        driverRouteLine = L.polyline([], { weight: 5, opacity: 0.8 }).addTo(map);
+    }
+
+    if (currentDriverPosition) {
+        await updateDriverRoute(currentDriverPosition.lat, currentDriverPosition.lng);
+        fitMapToDriverAndWarehouse();
+        return;
+    }
+
+    const driverLatLng = extractLatLng(driverCoords);
+    if (!driverLatLng) return;
+
+    setOrCreateDriverMarker(driverLatLng);
+    await updateDriverRoute(driverLatLng.lat, driverLatLng.lng, { force: true });
+    fitMapToDriverAndWarehouse();
+}
+
 // ============================================================
 // DRIVER ASSIGNED
 // ============================================================
 
 socket.on("driver_assigned", (data) => {
-    console.log("Driver assigned:", data.order_id);
+    log("Driver assigned:", data.order_id);
 
     const cards = document.querySelectorAll(".order-card");
 
     cards.forEach(card => {
-        const orderId = card
-            .querySelector(".order-id")
-            .getAttribute("id")
-
-        if (orderId !== String(data.order_id)) {
-            return;
-        }
+        const orderId = getOrderId(card);
+        if (orderId !== String(data.order_id)) return;
 
         // Move this card to the very top
         ordersList.prepend(card);
 
-        // Optional: make it visually noticeable
         card.style.transition = "background-color 0.3s";
         card.style.backgroundColor = "#fff8e1";
-        card.querySelector(".order-header .order-status").textContent = "Driver is Arriving...";
-        card.querySelector(".order-header .order-status").style.backgroundColor = "#25a140";
-        card.querySelector(".order-header .order-status").style.color = "blanchedalmond";
+
+        const statusEl = card.querySelector(".order-header .order-status");
+        if (statusEl) {
+            statusEl.textContent = "Driver is Arriving...";
+            statusEl.style.backgroundColor = "#25a140";
+            statusEl.style.color = "blanchedalmond";
+        }
 
         const cancelBtn = card.querySelector("#controlBtn .cancelBtn");
-        console.log(cancelBtn);
-
-        if (cancelBtn) {
-            cancelBtn.style.display = "none";
-        }
+        if (cancelBtn) cancelBtn.style.display = "none";
 
         // Prevent duplicate Track buttons
-        if (card.querySelector(".TrackOrderBtn")) {
-            return;
-        }
+        if (card.querySelector(".TrackOrderBtn")) return;
 
         const trackBtn = document.createElement("button");
         trackBtn.className = "TrackOrderBtn statusBtn";
@@ -141,116 +273,12 @@ socket.on("driver_assigned", (data) => {
             visibility: visible;
             display: inline-block;
         `;
+
         const controlBtn = card.querySelector("#controlBtn");
-        if (controlBtn) {
-            controlBtn.appendChild(trackBtn);
-        }
+        if (controlBtn) controlBtn.appendChild(trackBtn);
 
-        // ====================================================
-        // TRACK DRIVER CLICK
-        // ====================================================
-
-        trackBtn.addEventListener("click", async () => {
-            const orderid = card
-                .querySelector(".order-id").getAttribute("id")
-
-            trackingOrderId = orderid;
-
-            console.log("Tracking order:", trackingOrderId);
-
-            socket.emit("track_order", { order_id: trackingOrderId });
-
-            // Show map
-            document.getElementById("map-block").classList.add("active");
-
-            // ------------------------------------------------
-            // Warehouse coordinates
-            // ------------------------------------------------
-            const warehouseLoc = data.warehouse_coords;
-
-            warehouseLat = Number(warehouseLoc.lat);
-            warehouseLng = Number(warehouseLoc.long);
-
-            // ------------------------------------------------
-            // Initialize map only once
-            // ------------------------------------------------
-            if (!map) {
-                map = L.map("map");
-
-                L.tileLayer(
-                    "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-                    { attribution: "© OpenStreetMap contributors" }
-                ).addTo(map);
-            }
-
-            // ------------------------------------------------
-            // Warehouse marker
-            // ------------------------------------------------
-            if (!warehouseMarker) {
-                warehouseMarker = L.marker([warehouseLat, warehouseLng])
-                    .addTo(map)
-                    .bindPopup("Warehouse");
-            } else {
-                warehouseMarker.setLatLng([warehouseLat, warehouseLng]);
-            }
-
-            // ------------------------------------------------
-            // Route line
-            // ------------------------------------------------
-            if (!driverRouteLine) {
-                driverRouteLine = L.polyline([], {
-                    weight: 5,
-                    opacity: 0.8
-                }).addTo(map);
-            }
-
-            // ------------------------------------------------
-            // Resize map
-            // ------------------------------------------------
-            setTimeout(() => {
-                map.invalidateSize();
-            }, 300);
-
-            // ------------------------------------------------
-            // Existing driver location
-            // ------------------------------------------------
-            if (currentDriverPosition) {
-
-                await updateDriverRoute(
-                    currentDriverPosition.lat,
-                    currentDriverPosition.lng
-                );
-
-                map.fitBounds(
-                    L.latLngBounds([
-                        warehouseMarker.getLatLng(),
-                        currentDriverPosition
-                    ]),
-                    { padding: [40, 40] }
-                );
-
-            } else {
-
-                const driverLoc = data.driver_coords;
-                const latt = Number(driverLoc.latt);
-                const long = Number(driverLoc.long);
-
-                currentDriverPosition = L.latLng(latt, long);
-
-                await updateDriverRoute(latt, long);
-
-                driverMarker = L.marker([latt, long])
-                    .addTo(map)
-                    .bindPopup("Driver");
-
-                map.fitBounds(
-                    L.latLngBounds([
-                        warehouseMarker.getLatLng(),
-                        currentDriverPosition
-                    ]),
-                    { padding: [40, 40] }
-                );
-            }
+        trackBtn.addEventListener("click", () => {
+            beginTracking(orderId, data.warehouse_coords, data.driver_coords);
         });
 
         setTimeout(() => {
@@ -264,53 +292,29 @@ socket.on("driver_assigned", (data) => {
 // ============================================================
 
 socket.on("update_driver_location", async (data) => {
-    console.log("Received new location:", data);
+    log("Received new location:", data);
 
-    // Ignore updates for another order
     if (trackingOrderId && String(data.order_id) !== String(trackingOrderId)) {
         return;
     }
 
-    const lat = Number(data.lat);
-    const lng = Number(data.lng);
+    const newPosition = extractLatLng({ lat: data.lat, lng: data.lng });
+    if (!newPosition) return;
 
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-        console.error("Invalid driver coordinates:", data);
-        return;
-    }
-
-    const newPosition = L.latLng(lat, lng);
-
-    // ========================================================
-    // FIRST DRIVER LOCATION
-    // ========================================================
     if (!driverMarker) {
-
-        driverMarker = L.marker([lat, lng])
-            .addTo(map)
-            .bindPopup("Driver");
-
+        driverMarker = L.marker(newPosition).addTo(map).bindPopup("Driver");
         currentDriverPosition = newPosition;
 
         if (warehouseMarker) {
-
-            await updateDriverRoute(lat, lng);
-
-            map.fitBounds(
-                L.latLngBounds([warehouseMarker.getLatLng(), newPosition]),
-                { padding: [40, 40] }
-            );
+            await updateDriverRoute(newPosition.lat, newPosition.lng, { force: true });
+            fitMapToDriverAndWarehouse();
         }
-
         return;
     }
 
-    // ========================================================
-    // SMOOTH DRIVER MOVEMENT
-    // ========================================================
     animateDriverMarker(currentDriverPosition, newPosition);
-
     currentDriverPosition = newPosition;
+    await updateDriverRoute(newPosition.lat, newPosition.lng);
 });
 
 // ============================================================
@@ -318,15 +322,12 @@ socket.on("update_driver_location", async (data) => {
 // ============================================================
 
 function animateDriverMarker(from, to) {
-
     if (!from) {
         driverMarker.setLatLng(to);
         return;
     }
 
-    if (animationFrame) {
-        cancelAnimationFrame(animationFrame);
-    }
+    if (animationFrame) cancelAnimationFrame(animationFrame);
 
     const startTime = performance.now();
     const duration = 2500;
@@ -352,535 +353,349 @@ function animateDriverMarker(from, to) {
 }
 
 // ============================================================
-// OSRM ROUTING
+// ROUTE GEOMETRY: trim covered path, reroute on deviation
 // ============================================================
 
-async function updateDriverRoute(driverLat, driverLng) {
+function closestPointOnRoute(driverLatLng, routeCoords) {
+    let minDist = Infinity;
+    let minIndex = 0;
 
-    if (!warehouseMarker) {
-        return;
-    }
-    console.log("in update route");
-    
-    const warehousePosition = warehouseMarker.getLatLng();
+    routeCoords.forEach(([lat, lng], idx) => {
+        const dist = driverLatLng.distanceTo(L.latLng(lat, lng));
+        if (dist < minDist) {
+            minDist = dist;
+            minIndex = idx;
+        }
+    });
 
-    const warehouseLatVal = warehousePosition.lat;
-    const warehouseLngVal = warehousePosition.lng;
+    return { minDist, minIndex };
+}
 
+async function fetchOsrmRoute(driverLat, driverLng, warehouseLatVal, warehouseLngVal) {
     const url =
         `https://router.project-osrm.org/route/v1/driving/` +
-        `${driverLng},${driverLat};` +
-        `${warehouseLngVal},${warehouseLatVal}` +
+        `${driverLng},${driverLat};${warehouseLngVal},${warehouseLatVal}` +
         `?overview=full&geometries=geojson`;
 
-    try {
-        const response = await fetch(url);
-        const result = await response.json();
+    const response = await fetch(url);
+    const result = await response.json();
 
-        if (!result.routes || !result.routes.length) {
-            console.error("No OSRM route found");
+    if (!result.routes || !result.routes.length) {
+        console.error("No OSRM route found");
+        return null;
+    }
+
+    return result.routes[0].geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+}
+
+// Trims the already-covered part of the route as the driver moves; only
+// hits OSRM again if the driver has drifted more than ROUTE_DEVIATION_METERS
+// from the last computed route (i.e. took a different road).
+async function updateDriverRoute(driverLat, driverLng, { force = false } = {}) {
+    if (!warehouseMarker || !driverRouteLine) return;
+
+    const driverLatLng = L.latLng(driverLat, driverLng);
+
+    if (!force && driverRouteCoords.length > 0) {
+        const { minDist, minIndex } = closestPointOnRoute(driverLatLng, driverRouteCoords);
+
+        if (minDist <= ROUTE_DEVIATION_METERS) {
+            driverRouteCoords = driverRouteCoords.slice(minIndex);
+            driverRouteLine.setLatLngs(driverRouteCoords);
             return;
         }
+        log("Driver deviated from route by", minDist, "m — recalculating");
+    }
 
-        const route = result.routes[0];
+    const warehousePosition = warehouseMarker.getLatLng();
 
-        const coordinates = route.geometry.coordinates.map(
-            ([lng, lat]) => [lat, lng]
+    try {
+        const coords = await fetchOsrmRoute(
+            driverLat, driverLng,
+            warehousePosition.lat, warehousePosition.lng
         );
 
-        driverRouteLine.setLatLngs(coordinates);
-
+        if (coords) {
+            driverRouteCoords = coords;
+            driverRouteLine.setLatLngs(coords);
+        }
     } catch (error) {
         console.error("OSRM error:", error);
     }
 }
 
-// Add this to seller_orders.js
+// ============================================================
+// USER CANCELLED ORDER
+// ============================================================
+
 socket.on("seller_order_cancelled", (data) => {
-    console.log("User cancelled order:", data);
+    log("User cancelled order:", data);
 
     const cards = document.querySelectorAll(".order-card");
+
     cards.forEach(card => {
-        const cardToken = card.querySelector(".token-no").textContent.split(": ")[1].trim();
-        const status = card
-            .querySelector(".order-header")
-            .querySelector(".order-status")
-            .classList.replace(
-                'status-placed',
-                `status-${data.status}`
-            );
+        const tokenEl = card.querySelector(".token-no");
+        if (!tokenEl) return;
 
-        card
-            .querySelector(".order-header")
-            .querySelector(".order-status").textContent = "cancelled"
-        console.log(status);
+        const cardToken = tokenEl.textContent.split(": ")[1]?.trim();
 
-        console.log(cardToken, data.token_no);
+        // BUG FIX: the old code updated every card's status text/class
+        // unconditionally, then only checked the token match afterwards —
+        // so cancelling one order visually "cancelled" every visible card.
+        // Now the match check gates everything.
+        if (String(cardToken).trim() !== String(data.token_no).trim()) return;
 
-        if (String(cardToken).trim() === String(data.token_no).trim()) {
-            // print("equal")
-            // Optional: Show a "User Cancelled" overlay before removing
-            card.style.backgroundColor = "#ffebee";
-            setTimeout(() => card.remove(), 1500);
+        const statusSpan = card.querySelector(".order-header .order-status");
+        if (statusSpan) {
+            statusSpan.textContent = data.status;
+            statusSpan.className = `order-status status-${data.status}`;
         }
+
+        card.style.backgroundColor = "#ffebee";
+        setTimeout(() => card.remove(), 1500);
     });
 });
+
+// ============================================================
+// LOAD ORDERS
+// ============================================================
+
 async function loadOrders() {
     const res = await fetch(`/seller/orders`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ "res_id": resId })
+        body: JSON.stringify({ res_id: resId })
     });
-    if (res.status == 401) {
-        alert("unauthorized,Please Log in")
+
+    if (res.status === 401) {
+        alert("Unauthorized. Please log in.");
         window.location.href = "/login/seller";
         return;
     }
+
     const data = await res.json();
-    console.log(data)
+
     if (!data.success) {
-        ordersList.innerHTML = `<p>Error loading orders - ${data.message}</p>`;
+        ordersList.innerHTML = `<p>Error loading orders - ${escapeHtml(data.message)}</p>`;
         return;
     }
 
     const htmlParts = [];
-    let total_orders = 0;
+    let activeOrders = 0;
 
     data.orders.forEach(order => {
         let total = 0;
-        let restaurantsHTML = "";
+        let itemsHTML = "";
+
         Object.entries(order.items).forEach(([itemName, detail]) => {
-            const itemTotal = detail.price * detail.qty;
+            const price = Number(detail.price) || 0;
+            const qty = Number(detail.qty) || 0;
+            const itemTotal = price * qty;
             total += itemTotal;
-            restaurantsHTML += `
-                <div class="item" item_id=${itemName}>
-                    <span>${detail.name} x ${detail.qty}</span>
+
+            itemsHTML += `
+                <div class="item" data-item-id="${escapeHtml(itemName)}">
+                    <span>${escapeHtml(detail.name)} x ${qty}</span>
                     <span>₹${itemTotal}</span>
                 </div>`;
         });
-        let final_btn = null
-        if (order.delivery_status !== "searching"&&order.delivery_status !== "delivered" ) {
-            console.log(order);
-            
-            final_btn = `<button class="TrackOrderBtn statusBtn" style="opacity: 1;cursor: pointer;visibility: visible;display: inline-block;" data-warehouse_lat=${order.warehouse_coords.latt} data-warehouse_lng=${order.warehouse_coords.long} data-driver_lat=${order.driver_coords.latt} data-driver_lng=${order.driver_coords.long}>Track Driver</button>`
+
+        let controlBtnHTML;
+
+        if (order.delivery_status !== "searching" && order.delivery_status !== "delivered") {
+            const wLat = safeNumberAttr(order.warehouse_coords?.latt ?? order.warehouse_coords?.lat);
+            const wLng = safeNumberAttr(order.warehouse_coords?.long ?? order.warehouse_coords?.lng);
+            const dLat = safeNumberAttr(order.driver_coords?.latt ?? order.driver_coords?.lat);
+            const dLng = safeNumberAttr(order.driver_coords?.long ?? order.driver_coords?.lng);
+
+            controlBtnHTML = `
+                <button
+                    class="TrackOrderBtn statusBtn"
+                    style="opacity: 1; cursor: pointer; visibility: visible; display: inline-block;"
+                    data-warehouse_lat="${wLat}"
+                    data-warehouse_lng="${wLng}"
+                    data-driver_lat="${dLat}"
+                    data-driver_lng="${dLng}"
+                >Track Driver</button>`;
+        } else {
+            controlBtnHTML = `
+                <button class="cancelBtn statusBtn" style="
+                    background: red;
+                    color: white;
+                    padding: 5px 11px;
+                    border-radius: 7px;
+                    border: none;
+                    cursor: pointer;
+                ">Cancel Order</button>`;
         }
-        else {
-            final_btn = `<button class="cancelBtn statusBtn" style="...">Cancel Order</button>`
-            final_btn.add
-        }
+
         htmlParts.push(`
-            <div class="order-card" user_id=${order.user_id}>
+            <div class="order-card" data-user-id="${escapeHtml(order.user_id)}">
                 <div class="order-header">
-                    <span class="order-id" id=${order.order_id}>#${order.order_id}</span>
-                    <span class="order-status status-${order.status}">${order.status}</span>
+                    <span class="order-id" data-order-id="${escapeHtml(order.order_id)}">#${escapeHtml(order.order_id)}</span>
+                    <span class="order-status status-${escapeHtml(order.status)}">${escapeHtml(order.status)}</span>
                 </div>
-                <div class="token-no">Token No: ${order.token_no}</div>
-                <div class="order-date">${order.time}</div>
-                ${restaurantsHTML}
+                <div class="token-no">Token No: ${escapeHtml(order.token_no)}</div>
+                <div class="order-date">${escapeHtml(order.time)}</div>
+                ${itemsHTML}
                 <div class="total">Total: ₹${total}</div>
-                <div id=controlBtn>
-                <button class="completeBtn statusBtn" style="...">Completed</button>
-                ${final_btn}
+                <div id="controlBtn">
+                    <button class="completeBtn statusBtn" style="
+                        background: green;
+                        color: white;
+                        padding: 5px 11px;
+                        border-radius: 7px;
+                        border: none;
+                        cursor: pointer;
+                    ">Completed</button>
+                    ${controlBtnHTML}
                 </div>
             </div>
         `);
 
-        if (order.status === "placed") total_orders++;
+        if (order.status === "placed") activeOrders++;
     });
 
-    ordersList.innerHTML = htmlParts.join(""); // single write
-    document.getElementById("active_orders").textContent = total_orders;
+    ordersList.innerHTML = htmlParts.join("");
+    document.getElementById("active_orders").textContent = activeOrders;
     applyFilter();
-}
-total_orders = 0;
-async function loadOrderss() {
-    const res = await fetch(`/seller/orders`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ "res_id": resId })
-    });
-    if (res.status == 401) {
-        alert("unauthorized,Please Log in")
-        window.location.href = "/login/seller";
-        return;
-    }
-    const data = await res.json();
-    console.log(data)
-    if (!data.success) {
-        ordersList.innerHTML = `<p>Error loading orders - ${data.message}</p>`;
-        return;
-    }
-
-    ordersList.innerHTML = "";
-
-    data.orders.forEach(order => {
-        console.log(order)
-        let total = 0;
-
-        let restaurantsHTML = "";
-
-        Object.entries(order.items).forEach(([itemName, detail]) => {
-            console.log(itemName)
-            console.log(detail)
-            const itemTotal = detail.price * detail.qty;
-            total += itemTotal;
-
-            restaurantsHTML += `
-                    <div class="item" item_id=${itemName}>
-                        <span>${detail.name} x ${detail.qty}</span>
-                        <span>₹${itemTotal}</span>
-                    </div>
-                `;
-        });
-
-        const orderHTML = `
-            <div class="order-card" user_id=${order.user_id}>
-                <div class="order-header">
-                    <span class="order-id">#${order.order_id}</span>
-                    <span class="order-status status-${order.status}">
-                        ${order.status}
-                    </span>
-                </div>
-                <div class="token-no">Token No: ${order.token_no}</div>
-                <div class="order-date">${order.time}</div>
-
-                ${restaurantsHTML}
-
-                <div class="total">Total: ₹${total}</div>
-                <button class="completeBtn statusBtn" style="
-                    background: green;
-                    color: white;
-                    padding: 5px 11px;
-                    border-radius: 7px;
-                    border: none;
-                    cursor: pointer;
-                ">Completed</button>
-                <button class="cancelBtn statusBtn" style="
-                    background: red;
-                    cursor: pointer;
-                    color: white;
-                    padding: 5px 11px;
-                    border-radius: 7px;
-                    border: none;
-                ">Cancel Order</button>
-            </div>
-        `;
-
-        ordersList.innerHTML += orderHTML;
-        if (order.status === "placed") {
-            total_orders += 1;
-        }
-    });
-    console.log("Total orders:", total_orders);
-    document.getElementById("active_orders").textContent = total_orders;
-    applyFilter()
-}
-function renderSingleOrder(order, prepend = false) {
-    let total = 0;
-    let restaurantsHTML = "";
-
-    Object.entries(order.items).forEach(([itemName, detail]) => {
-        const itemTotal = detail.price * detail.qty;
-        total += itemTotal;
-
-        restaurantsHTML += `
-            <div class="item">
-                <span>${itemName} x ${detail.qty}</span>
-                <span>₹${itemTotal}</span>
-            </div>
-        `;
-    });
-
-    const orderHTML = `
-        <div class="order-card">
-            <div class="order-header">
-                <span class="order-id">#${order.order_id}</span>
-                <span class="order-status status-${order.status}">
-                    ${order.status}
-                </span>
-            </div>
-
-            <div class="order-date">${order.time}</div>
-
-            ${restaurantsHTML}
-
-            <div class="total">Total: ₹${total}</div>
-        </div>
-    `;
-
-    if (prepend) {
-        ordersList.innerHTML = orderHTML + ordersList.innerHTML;
-    } else {
-        ordersList.innerHTML += orderHTML;
-    }
 }
 
 loadOrders();
 
+// ============================================================
+// GLOBAL CLICK HANDLER
+// ============================================================
+
 document.addEventListener("click", async (e) => {
+
     if (e.target.classList.contains("completeBtn")) {
         const card = e.target.closest(".order-card");
-        const item = card.querySelector(".item");
-        const item_id = item.getAttribute("item_id")
+        const orderId = getOrderId(card);
+        const tokenNo = card.querySelector(".token-no").textContent.split(": ")[1];
+        const userId = card.dataset.userId;
 
-        // 🔥 select BOTH buttons inside this card
-        const buttons = card.querySelectorAll(".statusBtn");
-
-        const orderId = card
-            .querySelector(".order-id")
-            .textContent.replace("#", "");
-
-        const tokenNo = card
-            .querySelector(".token-no")
-            .textContent.split(": ")[1];
-
-        const userid = card.getAttribute("user_id")
         const res = await fetch("/update_order", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 order_id: orderId,
                 status: "completed",
-                user_id: userid
+                user_id: userId
             })
-        })
-        const data = await res.json()
-        console.log(data);
+        });
+
+        const data = await res.json();
 
         if (data.success) {
-
             socket.emit("order_completed", {
                 order_id: orderId,
-                userid: userid,
+                userid: userId,
                 token_no: tokenNo,
                 res_id: resId,
-                status: "completed"   // 🔥 send this instead
-            }
-            );
-            // 🔥 UPDATE UI HERE
+                status: "completed"
+            });
+
             const statusSpan = card.querySelector(".order-status");
-            statusSpan.textContent = "completed";   // or "completed"
+            statusSpan.textContent = "completed";
             statusSpan.className = "order-status status-completed";
 
             card.remove();
+        } else {
+            alert("Failed to update order status. Please try again.");
         }
-        else {
-            alert("failed updating status")
-        }
-
-        console.log("Completed sent:", orderId, tokenNo);
     }
+
     if (e.target.classList.contains("cancelBtn")) {
         const card = e.target.closest(".order-card");
+        const orderId = getOrderId(card);
+        const tokenNo = card.querySelector(".token-no").textContent.split(": ")[1];
+        const userId = card.dataset.userId;
 
-        const orderId = card
-            .querySelector(".order-id")
-            .textContent.replace("#", "");
-
-        const tokenNo = card
-            .querySelector(".token-no")
-            .textContent.split(": ")[1];
-
-        const userid = card.getAttribute("user_id")
         const res = await fetch("/update_order", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 order_id: orderId,
                 status: "canceled",
-                user_id: userid
+                user_id: userId
             })
-        })
-        const data = await res.json()
-        console.log(data);
+        });
+
+        const data = await res.json();
 
         if (data.success) {
-            console.log("emitted order_completed");
-
             socket.emit("order_completed", {
                 order_id: orderId,
-                userid: userid,
+                userid: userId,
                 token_no: tokenNo,
                 res_id: resId,
-                status: "canceled"  // 🔥 send this instead
+                status: "canceled"
             });
-            // 🔥 UPDATE UI HERE
+
             const statusSpan = card.querySelector(".order-status");
-            statusSpan.textContent = "canceled";   // or "completed"
+            statusSpan.textContent = "canceled";
             statusSpan.className = "order-status status-canceled";
 
             card.remove();
-            console.log("Completed sent:", orderId, tokenNo);
-        }
-        else {
-            alert("failed updating status")
+        } else {
+            alert("Failed to update order status. Please try again.");
         }
     }
+
     if (e.target.classList.contains("TrackOrderBtn")) {
-        const card = e.target.closest(".order-card");
-        const item = card.querySelector(".item");
-
-        // 🔥 select BOTH buttons inside this card
-        const buttons = card.querySelectorAll(".statusBtn");
-
-        const orderId = card
-            .querySelector(".order-id")
-            .textContent.replace("#", "");
         const trackBtn = e.target;
-        console.log(trackBtn.dataset);
-        
-        const driverLat = Number(trackBtn.dataset.driver_lat);
-        const driverLng = Number(trackBtn.dataset.driver_lng);
+        const card = e.target.closest(".order-card");
+        const orderId = getOrderId(card);
 
-        const warehouseLat = Number(trackBtn.dataset.warehouse_lat);
-        const warehouseLng = Number(trackBtn.dataset.warehouse_lng);
+        const warehouseCoords = {
+            lat: trackBtn.dataset.warehouse_lat,
+            lng: trackBtn.dataset.warehouse_lng
+        };
+        const driverCoords = {
+            lat: trackBtn.dataset.driver_lat,
+            lng: trackBtn.dataset.driver_lng
+        };
 
-        console.log("Driver:", driverLat, driverLng);
-        console.log("Warehouse:", warehouseLat, warehouseLng);
-
-        // your tracking code here
-        trackDriver(card,trackBtn)
+        await beginTracking(orderId, warehouseCoords, driverCoords);
     }
 });
-document.getElementById("backBtn").addEventListener("click", () => {
-    document.getElementById("map-block").classList.remove("active")
-})
-const overlay = document.querySelector(".overlay")
-document.getElementById("menuToggle").onclick = function () {
-    const sidebar = document.querySelector(".sidebar")
-    sidebar.classList.add("show")
-    sidebar.style.display = "block"
-    overlay.classList.add("show")
-};
 
-document.getElementById("hideCategoryBtn").addEventListener("click", function () {
-    const sidebar = document.querySelector(".sidebar")
-    sidebar.style.display = "none"
-    overlay.classList.remove("show")
-});
-overlay.addEventListener("click", () => {
-    const sidebar = document.querySelector(".sidebar")
-    overlay.classList.remove("show")
-    sidebar.style.display = "none"
-    sidebar.classList.remove("show")
-})
-
-async function trackDriver(card, trackBtn) {
-    const orderid = card
-        .querySelector(".order-id")
-        .getAttribute("id");
-
-    trackingOrderId = orderid;
-
-    console.log("Tracking order:", trackingOrderId);
-
-    socket.emit("track_order", {
-        order_id: trackingOrderId
+const backBtnEl = document.getElementById("backBtn");
+if (backBtnEl) {
+    backBtnEl.addEventListener("click", () => {
+        document.getElementById("map-block").classList.remove("active");
     });
+}
 
-    document.getElementById("map-block").classList.add("active");
+// ============================================================
+// SIDEBAR TOGGLE
+// ============================================================
 
-    // ------------------------------------------------
-    // Coordinates from Track Driver button
-    // ------------------------------------------------
-    
-    const driverLat = Number(trackBtn.dataset.driver_lat);
-    const driverLng = Number(trackBtn.dataset.driver_lng);
+const overlay = document.querySelector(".overlay");
+const sidebar = document.querySelector(".sidebar");
 
-    const warehouseLatVal = Number(trackBtn.dataset.warehouse_lat);
-    const warehouseLngVal = Number(trackBtn.dataset.warehouse_lng);
+const menuToggle = document.getElementById("menuToggle");
+if (menuToggle && sidebar && overlay) {
+    menuToggle.onclick = function () {
+        sidebar.classList.add("show");
+        sidebar.style.display = "block";
+        overlay.classList.add("show");
+    };
+}
 
-    warehouseLat = warehouseLatVal;
-    warehouseLng = warehouseLngVal;
+const hideCategoryBtn = document.getElementById("hideCategoryBtn");
+if (hideCategoryBtn && sidebar && overlay) {
+    hideCategoryBtn.addEventListener("click", function () {
+        sidebar.style.display = "none";
+        overlay.classList.remove("show");
+    });
+}
 
-    // ------------------------------------------------
-    // Initialize map only once
-    // ------------------------------------------------
-
-    if (!map) {
-        map = L.map("map");
-
-        L.tileLayer(
-            "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-            { attribution: "© OpenStreetMap contributors" }
-        ).addTo(map);
-    }
-
-    // ------------------------------------------------
-    // Warehouse marker
-    // ------------------------------------------------
-
-    if (!warehouseMarker) {
-        warehouseMarker = L.marker([warehouseLat, warehouseLng])
-            .addTo(map)
-            .bindPopup("Warehouse");
-    } else {
-        warehouseMarker.setLatLng([warehouseLat, warehouseLng]);
-    }
-
-    // ------------------------------------------------
-    // Route line
-    // ------------------------------------------------
-
-    if (!driverRouteLine) {
-        driverRouteLine = L.polyline([], {
-            weight: 5,
-            opacity: 0.8
-        }).addTo(map);
-    }
-
-    // ------------------------------------------------
-    // Resize map
-    // ------------------------------------------------
-
-    setTimeout(() => {
-        map.invalidateSize();
-    }, 300);
-
-    // ------------------------------------------------
-    // Existing driver location
-    // ------------------------------------------------
-
-    if (currentDriverPosition) {
-
-        await updateDriverRoute(
-            currentDriverPosition.lat,
-            currentDriverPosition.lng
-        );
-
-        map.fitBounds(
-            L.latLngBounds([
-                warehouseMarker.getLatLng(),
-                currentDriverPosition
-            ]),
-            { padding: [40, 40] }
-        );
-
-    } else {
-
-        currentDriverPosition = L.latLng(
-            driverLat,
-            driverLng
-        );
-
-        await updateDriverRoute(
-            driverLat,
-            driverLng
-        );
-
-        driverMarker = L.marker([
-            driverLat,
-            driverLng
-        ])
-            .addTo(map)
-            .bindPopup("Driver");
-
-        map.fitBounds(
-            L.latLngBounds([
-                warehouseMarker.getLatLng(),
-                currentDriverPosition
-            ]),
-            { padding: [40, 40] }
-        );
-    }
+if (overlay && sidebar) {
+    overlay.addEventListener("click", () => {
+        overlay.classList.remove("show");
+        sidebar.style.display = "none";
+        sidebar.classList.remove("show");
+    });
 }

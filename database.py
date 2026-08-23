@@ -435,13 +435,22 @@ def store_orders(userid, coordinates):
 def get_orders(userid):
     final_orders = []
     for order in seller_orders.find({"user_id": userid}):
-        final_orders.append({
-            "order_id": str(order["_id"]),
-            "token_no": order["token_no"],
-            "items": order["items"],
-            "status": order["status"],
-            "date": order["time"]
-        })
+    
+            order_data = {
+                "order_id": str(order["_id"]),
+                "token_no": order["token_no"],
+                "items": order["items"],
+                "status": order["status"],
+                "date": order["time"],
+                "delivery_status": order["delivery_status"]
+            }
+    
+            if order["delivery_status"] == "accepted":
+                order_data["warehouse_coords"] = {"latt":order["warehouse_lat"],"long":order["warehouse_lng"]}
+                order_data["driver_coords"] = {"latt": 19.39532841640067, "long": 78.43148662789395}
+    
+            final_orders.append(order_data)
+    
     return final_orders
 def store_seller_orders(res_id,items,userid):
     seller_orders.insert_one({"res_id":res_id,"items":items,"user_id":userid,"time":datetime.utcnow()})
