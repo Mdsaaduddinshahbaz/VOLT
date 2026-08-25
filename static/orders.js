@@ -28,7 +28,7 @@ function log(...args) {
 let driverMarker = null;
 let warehouseMarker = null;
 let driverRouteLine = null;
-// let map = null;
+let map = null;
 
 let currentDriverPosition = null; // L.LatLng
 let driverRouteCoords = [];        // [[lat,lng], ...] of the *current* OSRM route
@@ -174,7 +174,7 @@ async function beginTracking(orderId, warehouseCoords, driverCoords) {
 // ============================================================
 
 socket.on("driver_assigned", (data) => {
-    log("Driver assigned:", data.order_id);
+    console.log("Driver assigned:", data.order_id);
 
     const ordersList = document.getElementById("orders-list");
     const cards = document.querySelectorAll(".order-card");
@@ -219,7 +219,8 @@ socket.on("driver_assigned", (data) => {
 
         const controlBtn = card.querySelector("#controlBtn");
         if (controlBtn) controlBtn.appendChild(trackBtn);
-
+        console.log();
+        
         trackBtn.addEventListener("click", () => {
             beginTracking(orderId, data.warehouse_coords, data.driver_coords);
         });

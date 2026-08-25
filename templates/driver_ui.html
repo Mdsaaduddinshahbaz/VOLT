@@ -3214,7 +3214,8 @@
                     const lng = position.coords.longitude;
 
                     state.lastKnownPosition = { lat, lng, ts: Date.now() };
-
+                    console.log("emitting driver location order_id" ,orderId,lat,lng);
+                    
                     socket.emit("driver_location", {
                         order_id: orderId,
                         lat: lat,
