@@ -877,7 +877,7 @@ def store_order():
         #print("/store_order completed at",time.perf_counter()-start)
         return jsonify({"success": True, "id": seller_order_id})
     except Exception as e:
-        #print(e)
+        print(e)
         return jsonify({"success": False}), 500
     finally:
         release_lock(lock_key, token)

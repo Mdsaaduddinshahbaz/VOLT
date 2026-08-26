@@ -2,7 +2,7 @@ from celery import Celery
 
 celery = Celery(
     "myapp",
-    broker="redis://default:9EaR55kom1p9DAAtx1T3uEahpLfIYEQ3@redis-15710.crce281.ap-south-1-3.ec2.cloud.redislabs.com:15710/0"
+    broker="redis://default:dqmSgyy091TgedgTzAgY70XdjfoZxbAi@citrus-apparel-partner-35901.db.redis.io:19530/0"
 )
 print(celery.connection().connect())
 print("Connected!")

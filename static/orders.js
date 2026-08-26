@@ -68,7 +68,8 @@ function extractLatLng(coords) {
 
     const lat = Number(rawLat);
     const lng = Number(rawLng);
-
+    console.log(coords,lat,lng);
+    
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
         console.error("Invalid coordinates:", coords);
         return null;
@@ -147,7 +148,7 @@ async function beginTracking(orderId, warehouseCoords, driverCoords) {
     if (mapBlock) mapBlock.classList.add("active");
 
     ensureMapInitialized();
-
+    console.log("in begin tracking warehouse",warehouseCoords)
     const warehouseLatLng = extractLatLng(warehouseCoords);
     setWarehouseMarker(warehouseLatLng);
 
@@ -160,7 +161,8 @@ async function beginTracking(orderId, warehouseCoords, driverCoords) {
         fitMapToDriverAndWarehouse();
         return;
     }
-
+    console.log("in begin racking driver",driverCoords);
+    
     const driverLatLng = extractLatLng(driverCoords);
     if (!driverLatLng) return;
 
@@ -175,7 +177,8 @@ async function beginTracking(orderId, warehouseCoords, driverCoords) {
 
 socket.on("driver_assigned", (data) => {
     console.log("Driver assigned:", data.order_id);
-
+    console.log(data);
+    
     const ordersList = document.getElementById("orders-list");
     const cards = document.querySelectorAll(".order-card");
 
@@ -222,6 +225,7 @@ socket.on("driver_assigned", (data) => {
         console.log();
         
         trackBtn.addEventListener("click", () => {
+            console.log("track btn clicked",data)
             beginTracking(orderId, data.warehouse_coords, data.driver_coords);
         });
 
@@ -243,7 +247,8 @@ socket.on("update_driver_location", async (data) => {
     if (trackingOrderId && String(data.order_id) !== String(trackingOrderId)) {
         return;
     }
-
+    console.log("in update driver location",data);
+    
     const newPosition = extractLatLng({ lat: data.lat, lng: data.lng });
     if (!newPosition) return;
 
@@ -684,7 +689,7 @@ function initOrdersPage() {
                 lat: trackBtn.dataset.driver_lat,
                 lng: trackBtn.dataset.driver_lng
             };
-
+            console.log("in initorders beginTracking")
             await beginTracking(orderId, warehouseCoords, driverCoords);
         }
     });
@@ -718,4 +723,4 @@ if (backBtn) {
     });
 }
 
-document.getElementById("searchInput").style.display="none"
+// document.getElementById("searchInput").style.display="none"

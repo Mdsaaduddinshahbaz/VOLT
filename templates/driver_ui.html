@@ -2239,6 +2239,8 @@
             socket.emit("leave_driver_room", {});
         });
         socket.on("order_request", (data) => {
+            console.log("order_request");
+            
             state.recent_order = data;
             triggerIncomingOrder(data.store_name, data.amt, data.distance_km, data.customer_name, data.order_id, data.customer_km, data.warehouse_km);
         });
@@ -2832,7 +2834,7 @@
             if (state.odStep === 2) destination = [c.customer_lat, c.customer_lng];
             // openNavigation()
             if(state.odStep===0||state.odStep===2)
-            openNavigation(destination[0],destination[1])
+            // openNavigation(destination[0],destination[1])
             state.odStep++;
             saveSession();
             renderHomeStatus();
@@ -3205,6 +3207,7 @@
         let locationWatchId = null;
         function startLocationTracking(orderId) {
             if (locationWatchId !== null) {
+                console.log("ALREADY TRACKING")
                 return; // already tracking
             }
 

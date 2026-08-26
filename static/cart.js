@@ -937,14 +937,14 @@ async function initCartPage() {
         );
 
 
-    const overlay =
-        document.getElementById(
-            "locationOverlay"
-        );
-    overlay.addEventListener("click", () => {
-        box.classList.remove("show");
-        overlay.classList.remove("show");
-    });
+    // const overlay =
+    //     document.getElementById(
+    //         "locationOverlay"
+    //     );
+    // overlay.addEventListener("click", () => {
+    //     box.classList.remove("show");
+    //     overlay.classList.remove("show");
+    // });
 
     addressChgBtn.addEventListener(
         "click",

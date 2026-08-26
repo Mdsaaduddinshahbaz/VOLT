@@ -1432,7 +1432,7 @@ def accept_delivery_order(order_id, driver_id, redis_data):
             "token_no": result["token_no"],
             "amount": amount,
             "items": items_seller,
-            "warehouse_coords": {"lat": redis_data.get("warehouse_lat"), "long": redis_data.get("warehouse_lng")}
+            "warehouse_coords": {"latt": redis_data.get("warehouse_lat"), "long": redis_data.get("warehouse_lng")}
         }
     }
 
