@@ -1105,14 +1105,96 @@ def save_address(address,type,uid,cordinates):
         return ({"success":True})
     else:
         return ({"success":False})
-    
+
+from bson import ObjectId
+from bson.errors import InvalidId
+
+
+def serialize_address(addr):
+    """Mongo ObjectIds aren't JSON serializable — stringify before sending to the client."""
+    if not addr:
+        return None
+    out = dict(addr)
+    out["_id"] = str(out["_id"])
+    return out
+
+
+def save_address(address, type_, uid, cordinates, phone=None):
+    try:
+        user_obj_id = ObjectId(uid)
+    except (InvalidId, TypeError):
+        return {"success": False, "message": "Invalid user id"}
+
+    user = users.find_one({"_id": user_obj_id})
+    if not user:
+        return {"success": False, "message": "User not found"}
+
+    new_address = {
+        "_id": ObjectId(),          # <-- needed so update/delete can target this one address
+        "address": address,
+        "adrs_type": type_,
+        "coordinates": cordinates,
+    }
+    if phone is not None:
+        new_address["phone"] = phone
+
+    users.update_one(
+        {"_id": user_obj_id},
+        {"$push": {"addresses": new_address}}
+    )
+
+    return {"success": True, "address": new_address}
+
+def delete_address(address_id, uid):
+    try:
+        user_obj_id = ObjectId(uid)
+    except (InvalidId, TypeError):
+        return {"success": False, "message": "Invalid user id"}
+
+    result = users.update_one(
+        {"_id": user_obj_id},
+        {"$pull": {"addresses": {"_id": address_id}}}
+    )
+
+    if result.matched_count == 0:
+        return {"success": False, "message": "User not found"}
+
+    if result.modified_count == 0:
+        return {"success": False, "message": "Address not found for this user"}
+
+    return {"success": True}
+def update_address(address_id, uid, address, type_, phone=None):
+    try:
+        user_obj_id = ObjectId(uid)
+    except (InvalidId, TypeError):
+        return {"success": False, "message": "Invalid user id"}
+
+    match_filter = {"_id": user_obj_id, "addresses._id": address_id}
+
+    set_fields = {
+        "addresses.$.address": address,
+        "addresses.$.adrs_type": type_
+    }
+    if phone is not None:
+        set_fields["addresses.$.phone"] = phone
+
+    result = users.update_one(match_filter, {"$set": set_fields})
+
+    if result.matched_count == 0:
+        return {"success": False, "message": "Address not found for this user"}
+
+    updated_user = users.find_one(match_filter, {"addresses.$": 1})
+    updated_addr = updated_user["addresses"][0] if updated_user and updated_user.get("addresses") else None
+
+    return {"success": True, "address": updated_addr}
 def fetch_address(uid):
     user=users.find_one(ObjectId(uid))
 
     if(user):
         # ##print("addd",user["addresses"])
         if "addresses" in user:
-            return {"success":True,"address":user["addresses"],"status":200}
+            addresses = [serialize_address(a) for a in user.get("addresses", [])]
+            return {"success":True,"address":addresses,"status":200}
         else:
             return {"success":True,"address":"not_found","status":404}
     else:
@@ -1535,7 +1617,7 @@ def get_driver_order_history(driver_id, range_="today"):
         ts = o.get("delivered_at") or o.get("accepted_at")
         history.append({
             "id": str(o["_id"]),
-            "path": f"{o['restaurant_name']} → {o.get('customer_name', 'Customer')}",
+            "path": f"{o.get('customer_name', 'Customer')}",
             "time": ts.strftime("%d %b, %I:%M %p") if ts else "",
             "amt": o.get("amount"),
             "status": o.get("delivery_status")

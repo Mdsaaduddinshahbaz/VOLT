@@ -23,17 +23,17 @@
                 <div class="checkout-text" id="orderBtn">Orders</div>
                 <nav class="app-navbar" id="appNavbar">
     <div class="navbar-indicator" id="navbarIndicator"></div>
- 
+
     <a href="home.html" class="nav-item" data-page="home">
         <i class="fa-solid fa-house"></i>
         <span>Home</span>
     </a>
- 
+
     <a href="orders.html" class="nav-item" data-page="orders">
         <i class="fa-solid fa-bag-shopping"></i>
         <span>Orders</span>
     </a>
- 
+
     <a href="cart.html" class="nav-item active" data-page="cart">
         <i class="fa-solid fa-cart-shopping"></i>
         <span>Cart</span>
@@ -58,10 +58,6 @@
         <button class="btn" id="shopBtn">
             Start Shopping
         </button>
-
-        <!-- <a href="#" class="secondary-link">
-            Browse Categories
-        </a> -->
     </div>
         <div class="cart-left">
             <div class="checkout-card active-step">
@@ -69,8 +65,9 @@
                     <i class="fa-solid fa-location-dot"></i>
                     <div>
                         <h3>Delivery Address</h3>
-                        <p id="type" >Home -</p>
-                        <p id="Deliveryaddress">Home - Madhapur, Hyderabad, Telangana 500081</p>
+                        <p id="type">Home -</p>
+                        <p id="Deliveryaddress">Madhapur, Hyderabad, Telangana 500081</p>
+                        <p id="deliveryPhone"></p>
                     </div>
                 </div>
                 <button class="change-btn" id="ChangeAdrs">CHANGE</button>
@@ -79,13 +76,34 @@
                     <h1>fetching location...</h1>
                     <img src="../static/loading-spinner.svg" alt="Loading" id="loading" class="show">
                 </div>
+
                 <div id="addressOptions" class="address-options">
-                    
-                    <button id="liveLocationBtn" class="live-location-btn">
-                        <i class="fa-solid fa-location-crosshairs"></i>
-                        Use Current Location
+
+                    <div id="savedAddressList" class="saved-address-list"></div>
+
+                    <button type="button" id="addAddressBtn" class="add-address-btn">
+                        + Add New Address
                     </button>
-                    <h2>Saved Location</h2>
+
+                    <div id="addAddressForm" class="add-address-form">
+                        <select id="newAddrType">
+                            <option value="Home">Home</option>
+                            <option value="Work">Work</option>
+                            <option value="Other">Other</option>
+                        </select>
+
+                        <textarea id="newAddrText" placeholder="Flat / house no., street, area, city"></textarea>
+
+                        <input type="tel" id="newAddrPhone" placeholder="10-digit phone number for this address" maxlength="13">
+
+                        <button type="button" id="useLocationForNewAddr">📍 Use Current Location</button>
+
+                        <div class="form-actions">
+                            <button type="button" id="saveAddressBtn">Save Address</button>
+                            <button type="button" id="cancelAddressBtn">Cancel</button>
+                        </div>
+                    </div>
+
                 </div>
             </div>
 
@@ -97,9 +115,6 @@
                     </div>
                 </div>
                 <p class="payment-hint">Select your payment method after reviewing the items.</p>
-                <!-- <select>
-                    <option value="cash">Cash on Delivery</option>
-                </select> -->
 
                 <div id="paymentOptions" class="payment-options">
                     <label class="payment-option">
@@ -127,7 +142,6 @@
                         alt="Res">
                     <div class="res-info">
                         <h4>Burger King</h4>
-                        <!-- <p>Banjara Hills</p> -->
                     </div>
                 </div>
 
@@ -146,14 +160,6 @@
                     <span>Item Total</span>
                     <span id="totalPrice">₹0</span>
                 </div>
-                <!-- <div class="bill-row">
-                        <span>Delivery Fee | 2.5 kms</span>
-                        <span>₹30</span>
-                    </div>
-                    <div class="bill-row">
-                        <span>Govt Taxes & Restaurant Charges</span>
-                        <span>₹18</span>
-                    </div> -->
                 <hr>
                 <div class="bill-row total">
                     <span>TO PAY</span>

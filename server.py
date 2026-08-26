@@ -779,8 +779,33 @@ def decline_order_route():
 
     decline_delivery_order(order_id, g.driver_id)
     return jsonify({"success": True})
+from database import delete_address
+@app.post("/delete_address")
+@login_required
+def delete_address_route():
+    if g.type != "user":
+        return jsonify({"success": False, "message": "Unauthorized"}), 403
+    try:
+        payload = request.get_json(silent=True) or {}
+        address_id_raw = payload.get("address_id")
 
+        if not address_id_raw:
+            return jsonify({"success": False, "message": "address_id is required"}), 400
 
+        try:
+            address_id = ObjectId(address_id_raw)
+        except (InvalidId, TypeError):
+            return jsonify({"success": False, "message": "Invalid address_id"}), 400
+
+        result = delete_address(address_id, g.user_id)
+
+        if result["success"]:
+            return jsonify({"success": True})
+        else:
+            return jsonify({"success": False, "message": result.get("message", "Could not delete address")}), 404
+
+    except Exception as e:
+        return jsonify({"success": False, "message": "Internal server error"}), 500
 @app.post("/advance_delivery_step")
 @auth_driver
 def advance_delivery_step_route():
@@ -1205,7 +1230,7 @@ def signup_driver():
     },app.config["SECRET_KEY"],
     algorithm="HS256")
     response=jsonify({"success": True, "id": res["id"],})
-    response.set_cookie("user_token",token,httponly=True,secure=COOKIE_SECURE,max_age=7 * 24 * 60 * 60)
+    response.set_cookie("driver_token",token,httponly=True,secure=COOKIE_SECURE,max_age=7 * 24 * 60 * 60)
     if res["success"]:
         return response
     return jsonify({"success": False, "message": res.get("message", "Signup failed")}), 400
@@ -1546,6 +1571,47 @@ def update_status():
     except Exception as e:
         #print(e)
         return({"success":False})
+from bson import ObjectId
+from bson.errors import InvalidId
+from database import update_address,serialize_address
+@app.post("/update_address")
+@login_required
+def update_adress():
+    if g.type != "user":
+        return jsonify({"success": False, "message": "Unauthorized"}), 403
+    try:
+        payload = request.get_json(silent=True) or {}
+        address_id_raw = payload.get("address_id")
+
+        if not address_id_raw:
+            return jsonify({"success": False, "message": "address_id is required"}), 400
+
+        try:
+            address_id = ObjectId(address_id_raw)
+        except (InvalidId, TypeError):
+            return jsonify({"success": False, "message": "Invalid address_id"}), 400
+
+        # data, error = validate_address()
+        # if error:
+        #     return error
+
+        result = update_address(
+            address_id,
+            g.user_id,
+            payload["address"],
+            payload["adrs_type"],
+            payload.get("phone")
+        )
+
+        if result["success"]:
+            return jsonify({"success": True, "address": serialize_address(result["address"])})
+        else:
+            return jsonify({"success": False, "message": result.get("message", "Could not update address")}), 404
+
+    except Exception as e:
+        return jsonify({"success": False, "message": "Internal server error"}), 500
+
+
 @app.post("/update_order_user")
 @login_required
 #@limiter.limit("30 per minute")
@@ -2248,8 +2314,8 @@ def validate_address():
             }),
             400
         )
-
-    address = str(data.get("address", "")).strip()
+    
+    address = str(data.get("address", "")).strip() 
 
     if not address:
         return None, (
@@ -2260,7 +2326,7 @@ def validate_address():
             400
         )
 
-    address_type = str(data.get("address_type", "")).strip()
+    address_type = str(data.get("address_type", "")).strip() or str(data.get("adrs_type","")).strip()
 
     if not address_type:
         return None, (

@@ -269,6 +269,13 @@ body {
     display: none; /* type + address are merged into #Deliveryaddress by JS */
 }
 
+.step-header #deliveryPhone {
+    margin-top: 6px;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--ink-soft);
+}
+
 .change-btn {
     position: absolute;
     top: 20px;
@@ -403,10 +410,19 @@ body {
 
 .live-location-btn i { color: var(--flame); }
 
-.address-option {
+/* ---- Saved address list ---- */
+
+.saved-address-list {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 10px;
+}
+
+.address-option {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
     padding: 12px 14px;
     border: 1px solid var(--line);
     border-radius: 10px;
@@ -419,6 +435,13 @@ body {
     border-color: var(--flame);
 }
 
+.address-option-main {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
 .address-option .address-type {
     font-size: 12px;
     font-weight: 700;
@@ -427,10 +450,205 @@ body {
     color: var(--flame);
 }
 
-.address-option span[name="payment"] {
+.address-option .address-text {
     font-size: 13.5px;
     color: var(--ink);
     line-height: 1.4;
+}
+
+.address-option .address-phone {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--ink-soft);
+}
+
+.address-option .address-phone.missing {
+    color: var(--mustard);
+    font-weight: 700;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.address-option-actions {
+    display: flex;
+    gap: 2px;
+    flex-shrink: 0;
+}
+
+.address-edit-btn,
+.address-delete-btn {
+    border: none;
+    background: transparent;
+    color: var(--ink-soft);
+    font-size: 14px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 6px;
+    border-radius: 6px;
+    transition: background 0.12s ease, color 0.12s ease;
+}
+
+.address-edit-btn:hover {
+    color: var(--flame);
+    background: var(--card-hover);
+}
+
+.address-delete-btn:hover {
+    color: var(--flame);
+    background: var(--card-hover);
+}
+
+/* ---- Add / edit address form ---- */
+
+.add-address-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    background: var(--card);
+    border: 1px dashed var(--flame);
+    color: var(--flame);
+    font-family: var(--font-body);
+    font-weight: 700;
+    font-size: 13.5px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.12s ease;
+}
+
+.add-address-btn:hover {
+    background: var(--card-hover);
+}
+
+.add-address-form {
+    display: none;
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--card);
+}
+
+.add-address-form.show {
+    display: flex;
+}
+
+.add-address-form select,
+.add-address-form textarea,
+.add-address-form input[type="tel"] {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 13.5px;
+    box-sizing: border-box;
+}
+
+.add-address-form select:focus,
+.add-address-form textarea:focus,
+.add-address-form input[type="tel"]:focus {
+    outline: none;
+    border-color: var(--flame);
+}
+
+.add-address-form textarea {
+    min-height: 64px;
+    resize: vertical;
+    font-family: inherit;
+}
+
+.add-address-form textarea::placeholder,
+.add-address-form input[type="tel"]::placeholder {
+    color: var(--ink-soft);
+}
+
+#useLocationForNewAddr {
+    align-self: flex-start;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    border: 1px dashed var(--flame);
+    color: var(--flame);
+    font-family: var(--font-body);
+    font-weight: 700;
+    font-size: 12.5px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.12s ease;
+}
+
+#useLocationForNewAddr:hover {
+    background: var(--card-hover);
+}
+
+#useLocationForNewAddr:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.add-address-form .form-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 2px;
+}
+
+#saveAddressBtn {
+    flex: 1;
+    background: var(--flame);
+    color: var(--ink);
+    border: none;
+    font-family: var(--font-body);
+    font-weight: 700;
+    font-size: 13.5px;
+    padding: 11px 0;
+    border-radius: 9px;
+    cursor: pointer;
+    box-shadow: 0 3px 0 var(--flame-dark);
+    transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+}
+
+#saveAddressBtn:hover {
+    background: var(--flame-dark);
+}
+
+#saveAddressBtn:active {
+    transform: translateY(3px);
+    box-shadow: 0 0 0 var(--flame-dark);
+}
+
+#saveAddressBtn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: 0 3px 0 var(--flame-dark);
+}
+
+#cancelAddressBtn {
+    flex: 1;
+    background: transparent;
+    color: var(--ink-soft);
+    border: 1px solid var(--line);
+    font-family: var(--font-body);
+    font-weight: 700;
+    font-size: 13.5px;
+    padding: 11px 0;
+    border-radius: 9px;
+    cursor: pointer;
+    transition: border-color 0.12s ease, color 0.12s ease;
+}
+
+#cancelAddressBtn:hover {
+    border-color: var(--flame);
+    color: var(--flame);
 }
 
 /* Payment options */
@@ -576,6 +794,17 @@ body {
 
 .qty-btn:hover { background: var(--flame-dark); }
 .qty-btn:active { transform: scale(0.92); }
+
+.qty-btn:disabled {
+    background: var(--card);
+    color: var(--ink-soft);
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.qty-btn:disabled:hover {
+    background: var(--card);
+}
 
 .item_qty {
     font-family: var(--font-mono);
@@ -723,6 +952,12 @@ body {
 .qty-btn:focus-visible,
 .change-btn:focus-visible,
 .live-location-btn:focus-visible,
+.add-address-btn:focus-visible,
+.address-edit-btn:focus-visible,
+.address-delete-btn:focus-visible,
+#useLocationForNewAddr:focus-visible,
+#saveAddressBtn:focus-visible,
+#cancelAddressBtn:focus-visible,
 .empty-state .btn:focus-visible {
     outline: 2px solid var(--flame);
     outline-offset: 2px;
@@ -756,6 +991,10 @@ body {
         justify-self: start;
         font-size: 13px;
         color: var(--ink-soft);
+    }
+
+    .add-address-form .form-actions {
+        flex-direction: column;
     }
 }
 @media (max-width:218px) {
