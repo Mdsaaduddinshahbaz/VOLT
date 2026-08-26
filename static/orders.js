@@ -28,7 +28,7 @@ function log(...args) {
 let driverMarker = null;
 let warehouseMarker = null;
 let driverRouteLine = null;
-let map = null;
+let maps = null;
 
 let currentDriverPosition = null; // L.LatLng
 let driverRouteCoords = [];        // [[lat,lng], ...] of the *current* OSRM route
@@ -91,17 +91,17 @@ function ensureMapInitialized() {
     // BUG FIX: this used to be `if (map)`, which only created the map
     // when one already existed (i.e. never, on first load) and would
     // silently blow away an existing map + markers on later calls.
-    if (!map) {
-        map = L.map("map");
+    if (!maps) {
+        maps = L.map("map");
 
         L.tileLayer(
             "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
             { attribution: "© OpenStreetMap contributors" }
-        ).addTo(map);
+        ).addTo(maps);
     }
 
     setTimeout(() => {
-        if (map) map.invalidateSize();
+        if (maps) maps.invalidateSize();
     }, 300);
 }
 
@@ -112,7 +112,7 @@ function setWarehouseMarker(latLng) {
     warehouseLng = latLng.lng;
 
     if (!warehouseMarker) {
-        warehouseMarker = L.marker(latLng).addTo(map).bindPopup("Warehouse");
+        warehouseMarker = L.marker(latLng).addTo(maps).bindPopup("Warehouse");
     } else {
         warehouseMarker.setLatLng(latLng);
     }
@@ -120,7 +120,7 @@ function setWarehouseMarker(latLng) {
 
 function setOrCreateDriverMarker(latLng) {
     if (!driverMarker) {
-        driverMarker = L.marker(latLng).addTo(map).bindPopup("Driver");
+        driverMarker = L.marker(latLng).addTo(maps).bindPopup("Driver");
     } else {
         driverMarker.setLatLng(latLng);
     }
@@ -130,7 +130,7 @@ function setOrCreateDriverMarker(latLng) {
 function fitMapToDriverAndWarehouse() {
     if (!warehouseMarker || !currentDriverPosition) return;
 
-    map.fitBounds(
+    maps.fitBounds(
         L.latLngBounds([warehouseMarker.getLatLng(), currentDriverPosition]),
         { padding: [40, 40] }
     );
@@ -153,7 +153,7 @@ async function beginTracking(orderId, warehouseCoords, driverCoords) {
     setWarehouseMarker(warehouseLatLng);
 
     if (!driverRouteLine) {
-        driverRouteLine = L.polyline([], { weight: 5, opacity: 0.8 }).addTo(map);
+        driverRouteLine = L.polyline([], { weight: 5, opacity: 0.8 }).addTo(maps);
     }
 
     if (currentDriverPosition) {
@@ -254,7 +254,7 @@ socket.on("update_driver_location", async (data) => {
 
     // First driver location for this tracking session
     if (!driverMarker) {
-        driverMarker = L.marker(newPosition).addTo(map).bindPopup("Driver");
+        driverMarker = L.marker(newPosition).addTo(maps).bindPopup("Driver");
         currentDriverPosition = newPosition;
 
         if (warehouseMarker) {
