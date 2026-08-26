@@ -698,6 +698,7 @@ def search_driver(
     res_loc,
     username,
     user_coordinates,
+    number,
     order_id,
     count=10
 ):
@@ -741,7 +742,7 @@ def search_driver(
         )
 
         # Calculate on server
-        amount = (
+        amount = round(
             base_pay
             + (3 * warehouse_km)
             + (8 * delivery_distance)
@@ -767,6 +768,7 @@ def search_driver(
             "amount": amount,
 
             "customer_name": username,
+            "customer_number":number,
 
             "warehouse_lng": longitude,
 
@@ -815,7 +817,7 @@ def search_driver(
 
                 "customer_name":
                     username,
-
+                "customer_number":number,
                 "warehouse_lng":
                     longitude,
 

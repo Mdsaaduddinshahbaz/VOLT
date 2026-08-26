@@ -872,6 +872,7 @@ def store_order():
     username = g.username
     data = request.get_json(silent=True) or {}
     coordinates = data.get("coordinates")
+    number=data.get("number")
     if not coordinates:
         return jsonify({"success": False, "message": "coordinates are required"}), 400
 
@@ -898,7 +899,7 @@ def store_order():
         # res_location = get_restaurant_location(res_id)
         res_location = {"lat": 17.39532841640067, "lng": 78.43148662789395}
         if res_location:
-            search_driver.delay(res_location, username, coordinates, seller_order_id, 10)
+            search_driver.delay(res_location, username, coordinates, number,seller_order_id, 10)
         #print("/store_order completed at",time.perf_counter()-start)
         return jsonify({"success": True, "id": seller_order_id})
     except Exception as e:

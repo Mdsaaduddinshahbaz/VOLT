@@ -242,10 +242,12 @@
             padding: 0 26px;
             justify-content: center;
         }
+
         #screen-signup {
             padding: 0 26px;
             justify-content: center;
         }
+
         .brand {
             display: flex;
             align-items: center;
@@ -380,7 +382,7 @@
 
         /* ============ MAIN APP SHELL ============ */
         #main-app {
-            height: 100%;
+            height: 100vh;
         }
 
         .topbar {
@@ -1723,17 +1725,20 @@
                 <div class="field">
                     <label for="driveremailInput">Email</label>
                     <div class="phone-input-wrap">
-                        <input id="driveremailInput" type="email" placeholder="you@example.com" autocomplete="username" style="width:100%;">
+                        <input id="driveremailInput" type="email" placeholder="you@example.com" autocomplete="username"
+                            style="width:100%;">
                     </div>
                 </div>
                 <div class="field">
                     <label for="driverpasswordInput">Password</label>
                     <div class="phone-input-wrap">
-                        <input id="driverpasswordInput" type="password" placeholder="••••••••" autocomplete="current-password" style="width:100%;">
+                        <input id="driverpasswordInput" type="password" placeholder="••••••••"
+                            autocomplete="current-password" style="width:100%;">
                     </div>
                 </div>
                 <button class="btn btn-primary" style="width:100%; margin-top:14px;" onclick="signUp()">Sign Up</button>
-                <span class="btn">Already have an account?<a style="color: var(--orange);" id="redirectLogin" onclick="redirect(id)">Log In</a></span>
+                <span class="btn">Already have an account?<a style="color: var(--orange);" id="redirectLogin"
+                        onclick="redirect(id)">Log In</a></span>
             </section>
             <!-- ============ LOGIN ============ -->
             <section class="screen" id="screen-login">
@@ -1750,18 +1755,21 @@
                 <div class="field">
                     <label for="driverEmailInput">Email</label>
                     <div class="phone-input-wrap">
-                        <input id="driverEmailInput" type="email" placeholder="you@example.com" autocomplete="username" style="width:100%;">
+                        <input id="driverEmailInput" type="email" placeholder="you@example.com" autocomplete="username"
+                            style="width:100%;">
                     </div>
                 </div>
                 <div class="field">
                     <label for="driverPasswordInput">Password</label>
                     <div class="phone-input-wrap">
-                        <input id="driverPasswordInput" type="password" placeholder="••••••••" autocomplete="current-password" style="width:100%;">
+                        <input id="driverPasswordInput" type="password" placeholder="••••••••"
+                            autocomplete="current-password" style="width:100%;">
                     </div>
                 </div>
                 <button class="btn btn-primary" style="width:100%; margin-top:14px;" onclick="driverLogin()">Log
                     in</button>
-                <span class="btn">Dont have an account?<a style="color: var(--orange);" id="redirectSignup" onclick="redirect(id)">Sign Up</a></span>
+                <span class="btn">Dont have an account?<a style="color: var(--orange);" id="redirectSignup"
+                        onclick="redirect(id)">Sign Up</a></span>
             </section>
 
             <!-- ============ MAIN APP ============ -->
@@ -2027,7 +2035,7 @@
                         <div class="id" id="odOrderId">ORDER #VP4521</div>
                         <div class="status" id="odStatus">Heading to pickup</div>
                     </div>
-                    <button class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    <button class="icon-btn" onclick="dialNumber()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2">
                             <path
                                 d="M5 4h4l2 5-2.5 2.5a12 12 0 006 6L17 15l4 1v4a2 2 0 01-2 2C9.5 22 2 14.5 2 6a2 2 0 012-2z" />
@@ -2040,9 +2048,11 @@
                     <div class="pin a"><span></span></div>
                     <div class="pin b"><span></span></div>
                     <div class="eta-chip"><span class="dot"></span> 7 min · 1.8 km</div>
-                    <button class="map-expand-toggle" id="mapExpandToggle" onclick="toggleMapExpanded()" title="Expand map">
+                    <button class="map-expand-toggle" id="mapExpandToggle" onclick="toggleMapExpanded()"
+                        title="Expand map">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M8 3H5a2 2 0 00-2 2v3M16 3h3a2 2 0 012 2v3M8 21H5a2 2 0 01-2-2v-3M16 21h3a2 2 0 002-2v-3" />
+                            <path
+                                d="M8 3H5a2 2 0 00-2 2v3M16 3h3a2 2 0 012 2v3M8 21H5a2 2 0 01-2-2v-3M16 21h3a2 2 0 002-2v-3" />
                         </svg>
                     </button>
                 </div>
@@ -2099,7 +2109,7 @@
                                     <path d="M4 20c0-4 4-6 8-6s8 2 8 6" />
                                 </svg></div>
                             <div class="lbl" id="customer_name">Ananya Sharma</div>
-                            <button class="icon-btn" style="width:36px; height:36px;"><svg viewBox="0 0 24 24"
+                            <button class="icon-btn" style="width:36px; height:36px;" onclick="dialNumber()"><svg viewBox="0 0 24 24"
                                     fill="none" stroke="currentColor" stroke-width="2">
                                     <path
                                         d="M5 4h4l2 5-2.5 2.5a12 12 0 006 6L17 15l4 1v4a2 2 0 01-2 2C9.5 22 2 14.5 2 6a2 2 0 012-2z" />
@@ -2113,7 +2123,7 @@
                 </div>
 
                 <div class="od-actions">
-                    <button class="icon-btn" style="width:52px; height:52px;"><svg viewBox="0 0 24 24" fill="none"
+                    <button class="icon-btn" style="width:52px; height:52px;" onclick="dialNumber()"><svg viewBox="0 0 24 24" fill="none"
                             stroke="currentColor" stroke-width="2">
                             <path
                                 d="M5 4h4l2 5-2.5 2.5a12 12 0 006 6L17 15l4 1v4a2 2 0 01-2 2C9.5 22 2 14.5 2 6a2 2 0 012-2z" />
@@ -2239,10 +2249,10 @@
             socket.emit("leave_driver_room", {});
         });
         socket.on("order_request", (data) => {
-            console.log("order_request");
-            
+            console.log("order_request",data);
+
             state.recent_order = data;
-            triggerIncomingOrder(data.store_name, data.amt, data.distance_km, data.customer_name, data.order_id, data.customer_km, data.warehouse_km);
+            triggerIncomingOrder(data.store_name, data.amt, data.distance_km, data.customer_name, data.order_id, data.customer_km, data.warehouse_km, data.customer_number);
         });
         socket.on("order_taken", (data) => {
             if (state.pendingOrder && state.pendingOrder.order_id === data.order_id) {
@@ -2341,7 +2351,7 @@
 
         async function driverLogin() {
             console.log("clicked");
-            
+
             const email = document.getElementById('driverEmailInput').value.trim();
             const password = document.getElementById('driverPasswordInput').value;
 
@@ -2350,7 +2360,7 @@
                 return;
             }
             // console.log(holla);
-            
+
             try {
                 const res = await fetch('/validate_driver', {
                     method: 'POST',
@@ -2382,7 +2392,7 @@
         async function signUp() {
             const email = document.getElementById('driveremailInput').value.trim();
             const password = document.getElementById('driverpasswordInput').value;
-            const username =document.getElementById("driverusernameInput").value.trim();
+            const username = document.getElementById("driverusernameInput").value.trim();
             if (!email || !password || !username) {
                 showToast('Enter your email, username and password');
                 return;
@@ -2392,10 +2402,10 @@
                 const res = await fetch('/signup_driver', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email,username, password })
+                    body: JSON.stringify({ email, username, password })
                 });
                 const data = await res.json();
-                
+
                 if (data.success) {
                     driver_id = data.driver_id;
                     document.getElementById('topbarTitle').textContent = 'Hey, ' + username;
@@ -2439,7 +2449,8 @@
             try {
                 const res = await fetch('/driver/home_stats', { method: 'POST' });
                 const data = await res.json();
-
+                console.log(data);
+                
                 if (data.success) {
                     document.getElementById('statEarnings').textContent = '₹' + data.earnings_today;
                     document.getElementById('statOrders').textContent = data.orders_today;
@@ -2556,8 +2567,8 @@
         /* ============================================================
            INCOMING ORDER SHEET
            ============================================================ */
-        function triggerIncomingOrder(store, amt, distance, customer_name, order_id, customer_dist, warehouse_dist) {
-            const pick = { store: store, customer: customer_name, addr: "", dist: distance, amt: amt, order_id: order_id, customer_dist: customer_dist, warehouse_dist: warehouse_dist };
+        function triggerIncomingOrder(store, amt, distance, customer_name, order_id, customer_dist, warehouse_dist, customer_number) {
+            const pick = { store: store, customer: customer_name, addr: "", customer_number:customer_number, dist: distance, amt: amt, order_id: order_id, customer_dist: customer_dist, warehouse_dist: warehouse_dist };
             state.pendingOrder = pick;
 
             document.getElementById('sheetPickupName').textContent = store;
@@ -2676,7 +2687,7 @@
                     state.activeOrder = {
                         order_id: data.order.order_id,
                         id: 'VP' + data.order.token_no,
-                        store: p.store, customer: p.customer, addr: p.addr, dist: p.dist,
+                        store: p.store, customer: p.customer, addr: p.addr, dist: p.dist, customer_number:p.customer_number,
                         amt: data.order.amount, customer_dist: p.customer_dist, warehouse_dist: p.warehouse_dist,
                         items: data.order.items
                     };
@@ -2833,8 +2844,8 @@
             if (state.odStep === 0) destination = [c.warehouse_lat, c.warehouse_lng];
             if (state.odStep === 2) destination = [c.customer_lat, c.customer_lng];
             // openNavigation()
-            if(state.odStep===0||state.odStep===2)
-            // openNavigation(destination[0],destination[1])
+            if (state.odStep === 0 || state.odStep === 2)
+                // openNavigation(destination[0],destination[1])
             state.odStep++;
             saveSession();
             renderHomeStatus();
@@ -3217,8 +3228,8 @@
                     const lng = position.coords.longitude;
 
                     state.lastKnownPosition = { lat, lng, ts: Date.now() };
-                    console.log("emitting driver location order_id" ,orderId,lat,lng);
-                    
+                    console.log("emitting driver location order_id", orderId, lat, lng);
+
                     socket.emit("driver_location", {
                         order_id: orderId,
                         lat: lat,
@@ -3239,13 +3250,18 @@
             );
         }
         ///////////redirect auth page//////////////
-        function redirect(id){
-            if(id=="redirectLogin"){
+        function redirect(id) {
+            if (id == "redirectLogin") {
                 showScreen("screen-login")
             }
-            else{
+            else {
                 showScreen("screen-signup")
             }
+        }
+        /////////////////dial customer////////////////
+        function dialNumber(){
+            let number=state.activeOrder.customer_number
+            window.location.href = `tel:+91${number}`;
         }
     </script>
 </body>

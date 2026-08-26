@@ -1400,6 +1400,7 @@ def get_online_time_today(driver_id):
 def get_driver_home_stats(driver_id):
     driver = drivers.find_one({"_id": ObjectId(driver_id)})
     if not driver:
+        print("not driver",driver_id)
         return {"success": False}
 
     today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)

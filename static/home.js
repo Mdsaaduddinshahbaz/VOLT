@@ -626,7 +626,12 @@ async function initHomePage() {
 
                 // Optimistic UI update — instant feedback
                 qtyEl.textContent = Math.max(0, prevQty - 1);
-
+                if((prevQty -1)==0){
+                    const qtyControl = e.target.closest('.quantity-control');
+                            if (qtyControl) {
+                                qtyControl.outerHTML = `<button class="add-btn" id="${itemId}">ADD</button>`;
+                            }
+                }
                 scheduleCartUpdate(itemId, userId, -1, qtyEl,
                     (data) => {
                         if (data.total > 0) {

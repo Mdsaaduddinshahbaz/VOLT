@@ -611,7 +611,7 @@ async function initCartPage() {
                 user_id: userId,
                 items: restaurants,
                 coordinates: { long: longitude, latt: latitude },
-                phone: phone,
+                number: phone,
                 payment_method: selectedPayment
             })
         });
