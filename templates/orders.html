@@ -1,99 +1,228 @@
 <html lang="en">
 
+
+
+
 <head>
+
     <meta charset="UTF-8">
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <title>Document</title>
+
     <link rel="stylesheet" href="../static/user_navbar.css">
+
     <link rel="stylesheet" href="../static/cart.css">
+
     <link rel="stylesheet" href="../static/home.css">
+
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
     <link rel="stylesheet" href="../static/orders.css">
+
 </head>
 
+
+
+
 <body>
+
     <header class="navbar">
+
         <div class="nav-container">
+
             <div class="left-nav">
+
                 <img src="../static/logo2.png" alt="Swiggy Logo" class="logo">
+
                 <div class="location-overlay" id="locationOverlay"></div>
+
             </div>
+
             <nav class="app-navbar" id="appNavbar">
+
     <div class="navbar-indicator" id="navbarIndicator"></div>
+
  
+
     <a href="home.html" class="nav-item" data-page="home">
+
         <i class="fa-solid fa-house"></i>
+
         <span>Home</span>
+
     </a>
+
  
+
     <a href="orders.html" class="nav-item active" data-page="orders">
+
         <i class="fa-solid fa-bag-shopping"></i>
+
         <span>Orders</span>
+
     </a>
+
  
+
     <a href="cart.html" class="nav-item" data-page="cart">
+
         <i class="fa-solid fa-cart-shopping"></i>
+
         <span>Cart</span>
+
     </a>
+
 </nav>
+
         </div>
+
     </header>
+
     <div id="spa-content">
+
     <div class="orders-container">
+
         <div class="header">
+
             <h1>Your Orders</h1>
-            <select id="filterDropdown">
-                <option value="placed">Pending</option>
-                <option value="all">All Orders</option>
-                <option value="completed">Completed</option>
-                <option value="canceled">Canceled</option>
-            </select>
+
         </div>
+
+        <div class="filter-tabs" id="filterTabs" role="tablist">
+            <button type="button" class="filter-tab active" data-filter="placed" role="tab" aria-selected="true">Pending</button>
+            <button type="button" class="filter-tab" data-filter="all" role="tab" aria-selected="false">All Orders</button>
+            <button type="button" class="filter-tab" data-filter="completed" role="tab" aria-selected="false">Completed</button>
+            <button type="button" class="filter-tab" data-filter="canceled" role="tab" aria-selected="false">Canceled</button>
+        </div>
+
     <div class="empty-state" id="No_orders_container">
+
         <div class="icon">🛍️</div>
+
+
+
 
         <h1 id="No_orders">No Orders Yet</h1>
 
+
+
+
         <p>
+
             Looks like you haven't placed any orders yet.
+
             Start exploring our products and find something you'll love.
+
         </p>
 
+
+
+
         <button class="btn" id="shopBtn">
+
             Start Shopping
+
         </button>
 
+
+
+
         <!-- <a href="#" class="secondary-link">
+
             Browse Categories
+
         </a> -->
+
     </div>
+
+
+
 
 
         <div id="orders-list"></div>
+
         <!-- <div class="res_namesss" style="display: flex;justify-content: space-between;margin-bottom: 10px;">
+
             <span class="order-status status-placed">placed</span>
+
             </div> -->
+
         <div id="map-block">
+
     <div id="mapTop" style="background: beige;">
+
       <!-- <span><-</span> -->
+
       <img src="{{ url_for('static', filename='arrow.png') }}" alt="" style=" width: 32px; height: 31px; margin-left: 12px;" id="backBtn">
+
       <span style="font-size: 19px;">Track Order</span>
+
     </div>
+
     <div id="map"></div>
+
+    <div id="trackingSheet" class="tracking-sheet">
+
+        <div class="sheet-handle"></div>
+
+        <div class="eta-banner">
+            <span class="eta-text">Arriving in <strong id="etaMinutes">--</strong></span>
+            <span class="eta-sub" id="trackingStatusText">Driver is on the way</span>
+        </div>
+
+        <div class="driver-row">
+            <img src="../static/driver-placeholder.png" alt="" class="driver-avatar" id="driverAvatar">
+            <div class="driver-info">
+                <div class="driver-name" id="driverName">Your delivery partner</div>
+                <div class="driver-sub" id="driverVehicle"></div>
+            </div>
+            <a href="#" class="call-driver-btn" id="callDriverBtn" aria-label="Call delivery partner">
+                <i class="fa-solid fa-phone"></i>
+            </a>
+        </div>
+
+        <div class="pickup-row">
+            <span class="pickup-address" id="pickupAddress">Locating pickup point...</span>
+            <button type="button" class="trip-details-btn" id="tripDetailsBtn">Trip Details</button>
+        </div>
+
+        <div class="trip-details-panel" id="tripDetailsPanel"></div>
+
+    </div>
+
   </div>
+
     </div>
+
     </div>
+
     <!-- <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script> -->
+
     <script src="../static/user_navbar.js"></script>
+
      <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+
       <script src="../static/spa_router.js"></script>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
     <script src="../static/orders.js"></script>
+
       <script>
+
         lucide.createIcons();
+
     </script>
+
 </body>
+
+
+
 
 </html>

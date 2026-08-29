@@ -68,8 +68,7 @@ function extractLatLng(coords) {
 
     const lat = Number(rawLat);
     const lng = Number(rawLng);
-    console.log(coords,lat,lng);
-    
+
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
         console.error("Invalid coordinates:", coords);
         return null;
@@ -83,6 +82,10 @@ function safeNumberAttr(value) {
     return Number.isFinite(n) ? n : 0;
 }
 
+function currentUserId() {
+    return window.APP_USER_ID || window.location.pathname.split("/").pop();
+}
+
 // ============================================================
 // MAP HELPERS (shared between the two tracking entry points)
 // ============================================================
@@ -92,17 +95,46 @@ function ensureMapInitialized() {
     // when one already existed (i.e. never, on first load) and would
     // silently blow away an existing map + markers on later calls.
     if (!maps) {
-        maps = L.map("map");
+        maps = L.map("map", { zoomControl: true });
 
+        // CARTO's dark basemap instead of stock OSM tiles: no building
+        // fills/POI clutter at delivery zoom levels, and it's already
+        // dark so we don't need the old grayscale/invert/hue-rotate CSS
+        // hack (which looked pretty rough on real OSM tiles anyway).
         L.tileLayer(
-            "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-            { attribution: "© OpenStreetMap contributors" }
+            "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+            {
+                attribution:
+                    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                subdomains: "abcd",
+                maxZoom: 19
+            }
         ).addTo(maps);
     }
 
     setTimeout(() => {
         if (maps) maps.invalidateSize();
     }, 300);
+}
+
+// Small colored dots instead of Leaflet's default blue pin, so the map
+// reads as part of the app's theme rather than a generic embed.
+function driverIcon() {
+    return L.divIcon({
+        className: "",
+        html: '<div class="driver-marker-dot"></div>',
+        iconSize: [18, 18],
+        iconAnchor: [9, 9]
+    });
+}
+
+function pickupIcon() {
+    return L.divIcon({
+        className: "",
+        html: '<div class="pickup-marker-dot"></div>',
+        iconSize: [14, 14],
+        iconAnchor: [7, 7]
+    });
 }
 
 function setWarehouseMarker(latLng) {
@@ -112,15 +144,17 @@ function setWarehouseMarker(latLng) {
     warehouseLng = latLng.lng;
 
     if (!warehouseMarker) {
-        warehouseMarker = L.marker(latLng).addTo(maps).bindPopup("Warehouse");
+        warehouseMarker = L.marker(latLng, { icon: pickupIcon() }).addTo(maps);
     } else {
         warehouseMarker.setLatLng(latLng);
     }
+
+    reverseGeocodePickup(latLng.lat, latLng.lng);
 }
 
 function setOrCreateDriverMarker(latLng) {
     if (!driverMarker) {
-        driverMarker = L.marker(latLng).addTo(maps).bindPopup("Driver");
+        driverMarker = L.marker(latLng, { icon: driverIcon() }).addTo(maps);
     } else {
         driverMarker.setLatLng(latLng);
     }
@@ -132,13 +166,138 @@ function fitMapToDriverAndWarehouse() {
 
     maps.fitBounds(
         L.latLngBounds([warehouseMarker.getLatLng(), currentDriverPosition]),
-        { padding: [40, 40] }
+        { padding: [40, 120] } // extra bottom padding so the tracking sheet doesn't cover the pins
     );
+}
+
+// Reverse-geocodes the pickup/warehouse point into a short readable address
+// for the "Pickup" line in the tracking sheet.
+async function reverseGeocodePickup(lat, lng) {
+    const pickupAddressEl = document.getElementById("pickupAddress");
+    if (!pickupAddressEl) return;
+
+    try {
+        const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
+        );
+        const data = await res.json();
+        const addr = data.address || {};
+
+        const readable = [addr.road, addr.suburb || addr.neighbourhood, addr.city || addr.town]
+            .filter(Boolean)
+            .join(", ");
+
+        pickupAddressEl.textContent = readable || data.display_name || "Restaurant location";
+    } catch (e) {
+        pickupAddressEl.textContent = "Restaurant location";
+    }
+}
+
+// ============================================================
+// TRACKING SHEET (driver info / ETA / pickup / trip details)
+// ============================================================
+
+function resetTrackingSheet() {
+    const nameEl = document.getElementById("driverName");
+    const subEl = document.getElementById("driverVehicle");
+    const avatarEl = document.getElementById("driverAvatar");
+    const callBtn = document.getElementById("callDriverBtn");
+    const statusEl = document.getElementById("trackingStatusText");
+    const etaEl = document.getElementById("etaMinutes");
+    const pickupEl = document.getElementById("pickupAddress");
+    const panel = document.getElementById("tripDetailsPanel");
+    const detailsBtn = document.getElementById("tripDetailsBtn");
+
+    if (nameEl) nameEl.textContent = "Your delivery partner";
+    if (subEl) subEl.textContent = "";
+    if (avatarEl) avatarEl.src = "../static/driver-placeholder.png";
+    // if (callBtn) callBtn.style.display = "none";
+    if (statusEl) statusEl.textContent = "Driver is on the way";
+    if (etaEl) etaEl.textContent = "--";
+    if (pickupEl) pickupEl.textContent = "Locating pickup point...";
+    if (panel) { panel.classList.remove("show"); panel.innerHTML = ""; }
+    if (detailsBtn) { detailsBtn.classList.remove("active"); detailsBtn.textContent = "Trip Details"; }
+}
+
+// `meta` is best-effort: driver_assigned / order data may not carry a
+// name/phone/vehicle yet. The sheet degrades gracefully when they're absent
+// (generic "Your delivery partner" label, call button hidden). Wire these
+// through from the backend (driver_name, driver_phone, vehicle_no) whenever
+// that data becomes available and this'll pick it up automatically.
+function populateTrackingSheet(orderId, meta = {}) {
+    resetTrackingSheet();
+
+    const nameEl = document.getElementById("driverName");
+    const subEl = document.getElementById("driverVehicle");
+    const avatarEl = document.getElementById("driverAvatar");
+    const callBtn = document.getElementById("callDriverBtn");
+
+    if (meta.driverName && nameEl) nameEl.textContent = meta.driverName;
+    if (meta.vehicleNo && subEl) subEl.textContent = meta.vehicleNo;
+    if (meta.driverPhoto && avatarEl) avatarEl.src = meta.driverPhoto;
+
+    if (meta.driverPhone && callBtn) {
+        console.log(meta.driverPhone);
+        
+        callBtn.href = `tel:${meta.driverPhone}`;
+        callBtn.style.display = "flex";
+    }
+
+    renderTripDetails(orderId);
+}
+
+function updateEtaDisplay(durationSeconds) {
+    const etaEl = document.getElementById("etaMinutes");
+    if (!etaEl || durationSeconds == null || !Number.isFinite(durationSeconds)) return;
+
+    const mins = Math.max(1, Math.round(durationSeconds / 60));
+    etaEl.textContent = `${mins} min${mins === 1 ? "" : "s"}`;
+}
+
+function renderTripDetails(orderId) {
+    const panel = document.getElementById("tripDetailsPanel");
+    if (!panel) return;
+
+    const cached = sessionStorage.getItem(`cachedOrders_${currentUserId()}`);
+    if (!cached) { panel.innerHTML = ""; return; }
+
+    try {
+        const orders = JSON.parse(cached);
+        const order = orders.find(o => String(o.order_id) === String(orderId));
+        if (!order) { panel.innerHTML = ""; return; }
+
+        const cart = order.items?.items || order.items || {};
+        let total = 0;
+        let itemsHTML = "";
+
+        Object.entries(cart).forEach(([itemId, item]) => {
+            const price = Number(item.price) || 0;
+            const qty = Number(item.qty) || 0;
+            total += price * qty;
+
+            itemsHTML += `
+                <div class="item">
+                    <span>${escapeHtml(item.name)} x ${qty}</span>
+                    <span>₹${price * qty}</span>
+                </div>
+            `;
+        });
+
+        if (typeof order.items?.total === "number") total = order.items.total;
+        else if (typeof order.total === "number") total = order.total;
+
+        panel.innerHTML = `${itemsHTML}<div class="total">Total: ₹${total}</div>`;
+    } catch (e) {
+        console.warn("Failed to render trip details:", e);
+        panel.innerHTML = "";
+    }
 }
 
 // Shared entry point used both by the "driver_assigned" inline Track button
 // and by the delegated click handler on already-rendered cards.
-async function beginTracking(orderId, warehouseCoords, driverCoords) {
+async function beginTracking(orderId, warehouseCoords, driverCoords, meta = {}) {
+    console.log("beginning to track");
+    
     trackingOrderId = orderId;
     log("Tracking order:", trackingOrderId);
 
@@ -147,13 +306,15 @@ async function beginTracking(orderId, warehouseCoords, driverCoords) {
     const mapBlock = document.getElementById("map-block");
     if (mapBlock) mapBlock.classList.add("active");
 
+    populateTrackingSheet(orderId, meta);
+
     ensureMapInitialized();
-    console.log("in begin tracking warehouse",warehouseCoords)
+
     const warehouseLatLng = extractLatLng(warehouseCoords);
     setWarehouseMarker(warehouseLatLng);
 
     if (!driverRouteLine) {
-        driverRouteLine = L.polyline([], { weight: 5, opacity: 0.8 }).addTo(maps);
+        driverRouteLine = L.polyline([], { color: "#FF5D2E", weight: 5, opacity: 0.85 }).addTo(maps);
     }
 
     if (currentDriverPosition) {
@@ -161,8 +322,7 @@ async function beginTracking(orderId, warehouseCoords, driverCoords) {
         fitMapToDriverAndWarehouse();
         return;
     }
-    console.log("in begin racking driver",driverCoords);
-    
+
     const driverLatLng = extractLatLng(driverCoords);
     if (!driverLatLng) return;
 
@@ -176,9 +336,8 @@ async function beginTracking(orderId, warehouseCoords, driverCoords) {
 // ============================================================
 
 socket.on("driver_assigned", (data) => {
-    console.log("Driver assigned:", data.order_id);
-    console.log(data);
-    
+    log("Driver assigned:", data.order_id, data);
+
     const ordersList = document.getElementById("orders-list");
     const cards = document.querySelectorAll(".order-card");
 
@@ -222,11 +381,15 @@ socket.on("driver_assigned", (data) => {
 
         const controlBtn = card.querySelector("#controlBtn");
         if (controlBtn) controlBtn.appendChild(trackBtn);
-        console.log();
-        
+
         trackBtn.addEventListener("click", () => {
-            console.log("track btn clicked",data)
-            beginTracking(orderId, data.warehouse_coords, data.driver_coords);
+            beginTracking(orderId, data.warehouse_coords, data.driver_coords, {
+                driverName: data.driver_name,
+                // driverPhone: data.driver_phone,
+                vehicleNo: data.vehicle_no,
+                driverPhoto: data.driver_photo,
+                driverPhone: data.driver_number
+            });
         });
 
         // Reset card highlight
@@ -247,14 +410,17 @@ socket.on("update_driver_location", async (data) => {
     if (trackingOrderId && String(data.order_id) !== String(trackingOrderId)) {
         return;
     }
-    console.log("in update driver location",data);
-    
+
+    if(data.msg){
+        let driver_status_text=document.getElementById("trackingStatusText")
+        driver_status_text.textContent=data.msg
+    }
     const newPosition = extractLatLng({ lat: data.lat, lng: data.lng });
     if (!newPosition) return;
 
     // First driver location for this tracking session
     if (!driverMarker) {
-        driverMarker = L.marker(newPosition).addTo(maps).bindPopup("Driver");
+        driverMarker = L.marker(newPosition, { icon: driverIcon() }).addTo(maps);
         currentDriverPosition = newPosition;
 
         if (warehouseMarker) {
@@ -263,7 +429,6 @@ socket.on("update_driver_location", async (data) => {
         }
         return;
     }
-
     // Smooth movement to the new spot, then trim/recompute the route.
     animateDriverMarker(currentDriverPosition, newPosition);
     currentDriverPosition = newPosition;
@@ -341,16 +506,22 @@ async function fetchOsrmRoute(driverLat, driverLng, warehouseLatVal, warehouseLn
         return null;
     }
 
+    const route = result.routes[0];
+
     // GeoJSON is [lng, lat] — flip to Leaflet's [lat, lng].
-    return result.routes[0].geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+    return {
+        coords: route.geometry.coordinates.map(([lng, lat]) => [lat, lng]),
+        durationSeconds: route.duration
+    };
 }
 
 // Redraws the route line. If the driver is still close to the last computed
-// route, this just trims off the part already covered (no network call).
+// route, this just trims off the part already covered (no network call, and
+// the ETA banner is left as-is since we didn't get a fresh duration).
 // If the driver has drifted past ROUTE_DEVIATION_METERS from that route —
-// e.g. took a different street — it fetches a fresh OSRM route from the
-// driver's current position. Pass { force: true } to always refetch
-// (used the first time a route is drawn for a tracking session).
+// e.g. took a different street — it fetches a fresh OSRM route (and a fresh
+// ETA) from the driver's current position. Pass { force: true } to always
+// refetch (used the first time a route is drawn for a tracking session).
 async function updateDriverRoute(driverLat, driverLng, { force = false } = {}) {
     if (!warehouseMarker || !driverRouteLine) return;
 
@@ -372,14 +543,15 @@ async function updateDriverRoute(driverLat, driverLng, { force = false } = {}) {
     const warehousePos = warehouseMarker.getLatLng();
 
     try {
-        const coords = await fetchOsrmRoute(
+        const route = await fetchOsrmRoute(
             driverLat, driverLng,
             warehousePos.lat, warehousePos.lng
         );
 
-        if (coords) {
-            driverRouteCoords = coords;
-            driverRouteLine.setLatLngs(coords);
+        if (route) {
+            driverRouteCoords = route.coords;
+            driverRouteLine.setLatLngs(route.coords);
+            updateEtaDisplay(route.durationSeconds);
         }
     } catch (error) {
         console.error("OSRM error:", error);
@@ -408,7 +580,7 @@ socket.on("order_status_updated", (data) => {
     });
 
     // Keep cache in sync
-    const uid = window.APP_USER_ID || window.location.pathname.split("/").pop();
+    const uid = currentUserId();
     const cacheKey = `cachedOrders_${uid}`;
     const cached = sessionStorage.getItem(cacheKey);
 
@@ -468,14 +640,27 @@ function renderOrders(orders, ordersList, no_order_container) {
             total = order.total;
         }
 
-        let controlBtnHTML;
+        const orderStatus = (order.status || "").toLowerCase();
+        const deliveryStatus = (order.delivery_status || "").toLowerCase();
+        const isFinalOrder = orderStatus === "completed" || orderStatus === "canceled";
 
-        if (order.delivery_status !== "searching" && order.delivery_status !== "delivered") {
-            const wLat = safeNumberAttr(order.warehouse_coords?.latt ?? order.warehouse_coords?.lat);
-            const wLng = safeNumberAttr(order.warehouse_coords?.long ?? order.warehouse_coords?.lng);
-            const dLat = safeNumberAttr(order.driver_coords?.latt ?? order.driver_coords?.lat);
-            const dLng = safeNumberAttr(order.driver_coords?.long ?? order.driver_coords?.lng);
+        // Prefer an explicit delivery_status when the backend sends one.
+        // If it doesn't (or spells it differently), fall back to "does this
+        // order actually have real driver coordinates" as the signal that a
+        // driver has been assigned and tracking is possible.
+        const wLat = safeNumberAttr(order.warehouse_coords?.latt ?? order.warehouse_coords?.lat);
+        const wLng = safeNumberAttr(order.warehouse_coords?.long ?? order.warehouse_coords?.lng);
+        const dLat = safeNumberAttr(order.driver_coords?.latt ?? order.driver_coords?.lat);
+        const dLng = safeNumberAttr(order.driver_coords?.long ?? order.driver_coords?.lng);
+        const hasDriverCoords = Boolean(dLat) && Boolean(dLng);
 
+        const driverAssigned = deliveryStatus
+            ? (deliveryStatus !== "searching" && deliveryStatus !== "delivered")
+            : hasDriverCoords;
+
+        let controlBtnHTML = "";
+
+        if (!isFinalOrder && driverAssigned) {
             controlBtnHTML = `
                 <button
                     class="TrackOrderBtn statusBtn"
@@ -484,9 +669,13 @@ function renderOrders(orders, ordersList, no_order_container) {
                     data-warehouse_lng="${wLng}"
                     data-driver_lat="${dLat}"
                     data-driver_lng="${dLng}"
+                    data-driver_name="${escapeHtml(order.driver_name || "")}"
+                    data-driver_phone="${escapeHtml(order.driver_phone || "")}"
+                    data-vehicle_no="${escapeHtml(order.vehicle_no || "")}"
                 >Track Driver</button>
             `;
-        } else {
+        } else if (!isFinalOrder) {
+            // No driver yet (still searching/placed) — order can still be cancelled.
             controlBtnHTML = `
                 <button
                     class="cancelBtn"
@@ -494,6 +683,7 @@ function renderOrders(orders, ordersList, no_order_container) {
                 >Cancel Order</button>
             `;
         }
+        // else: completed/canceled orders get no action button at all.
 
         return `
             <div class="order-card">
@@ -520,23 +710,21 @@ function renderOrders(orders, ordersList, no_order_container) {
 }
 
 // ============================================================
-// FILTER
+// FILTER (pill tabs)
 // ============================================================
 
-function applyFilterFor(filterDropdown, no_order_container) {
+function applyFilterFor(filterValue, no_order_container) {
     no_order_container.classList.remove("show");
 
     const cards = document.querySelectorAll(".order-card");
     let visibleCards = 0;
+    const wanted = (filterValue || "all").toLowerCase();
 
     cards.forEach(card => {
         const statusEl = card.querySelector(".order-status");
         const statusText = statusEl ? statusEl.textContent.trim().toLowerCase() : "";
 
-        if (
-            filterDropdown.value.toLowerCase() === "all" ||
-            statusText === filterDropdown.value.toLowerCase()
-        ) {
+        if (wanted === "all" || statusText === wanted) {
             card.style.display = "block";
             visibleCards++;
         } else {
@@ -580,7 +768,8 @@ async function loadOrders(userId, { background = false } = {}) {
     }
 
     const data = await res.json();
-
+    console.log(data);
+    
     if (!data.success) {
         if (!sessionStorage.getItem(cacheKey)) {
             ordersList.innerHTML = "<p>Error loading orders</p>";
@@ -617,83 +806,158 @@ function initOrdersPage() {
     const ordersList = document.getElementById("orders-list");
     if (!ordersList) return;
 
-    const pathParts = window.location.pathname.split("/");
-    const userId = window.APP_USER_ID || pathParts[pathParts.length - 1];
-
+    const userId = currentUserId();
     const no_order_container = document.getElementById("No_orders_container");
-    const filterDropdown = document.getElementById("filterDropdown");
-
-    filterDropdown.addEventListener("change", () =>
-        applyFilterFor(filterDropdown, no_order_container)
-    );
+    const activeFilter =
+        document.querySelector(".filter-tab.active")?.dataset.filter || "all";
 
     loadOrders(userId).then(() =>
-        applyFilterFor(filterDropdown, no_order_container)
+        applyFilterFor(activeFilter, no_order_container)
     );
+}
 
-    ordersList.addEventListener("click", async (e) => {
-        if (e.target.classList.contains("cancelBtn")) {
-            const card = e.target.closest(".order-card");
-            const orderId = card.querySelector(".order-id").textContent.replace("#", "").trim();
-            const tokenNo = card.querySelector(".token-no").textContent.split(": ")[1];
+// ============================================================
+// GLOBAL DELEGATED CLICK HANDLER
+//
+// Bound ONCE to `document` (not to #orders-list / #tripDetailsBtn /
+// #backBtn directly). A listener attached to a specific node stops
+// working the moment that node is removed or replaced — which is
+// exactly what happens if the SPA router ever re-renders the markup
+// inside #spa-content after initOrdersPage() already ran once (the
+// visible button on screen would then be a brand-new element with no
+// listener on it at all: clicks on it would silently do nothing,
+// which matches "nothing happens on refresh" exactly).
+//
+// `document` itself is never replaced, so matching with
+// e.target.closest(...) at click time is safe regardless of how many
+// times the page content underneath gets swapped out.
+// ============================================================
 
-            const res = await fetch("/update_order_user", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    order_id: orderId,
-                    status: "canceled",
-                    user_id: userId
-                })
+document.addEventListener("click", async (e) => {
+
+    // ---- Filter tabs ----
+    const filterTab = e.target.closest(".filter-tab");
+    if (filterTab) {
+        const no_order_container = document.getElementById("No_orders_container");
+
+        document.querySelectorAll(".filter-tab").forEach(t => {
+            t.classList.remove("active");
+            t.setAttribute("aria-selected", "false");
+        });
+        filterTab.classList.add("active");
+        filterTab.setAttribute("aria-selected", "true");
+
+        if (no_order_container) applyFilterFor(filterTab.dataset.filter, no_order_container);
+        return;
+    }
+
+    // ---- Cancel order ----
+    const cancelBtn = e.target.closest(".cancelBtn");
+    if (cancelBtn) {
+        const card = cancelBtn.closest(".order-card");
+        if (!card) return;
+
+        const userId = currentUserId();
+        const orderId = card.querySelector(".order-id").textContent.replace("#", "").trim();
+        const tokenNo = card.querySelector(".token-no").textContent.split(": ")[1];
+
+        const res = await fetch("/update_order_user", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ order_id: orderId, status: "canceled", user_id: userId })
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+            socket.emit("user_cancelled_order", {
+                order_id: orderId,
+                token_no: tokenNo,
+                user_id: userId,
+                status: "canceled"
             });
 
-            const data = await res.json();
-
-            if (data.success) {
-                socket.emit("user_cancelled_order", {
-                    order_id: orderId,
-                    token_no: tokenNo,
-                    user_id: userId,
-                    status: "canceled"
-                });
-
-                const statusSpan = card.querySelector(".order-status");
+            const statusSpan = card.querySelector(".order-status");
+            if (statusSpan) {
                 statusSpan.textContent = "canceled";
                 statusSpan.className = "order-status status-canceled";
-
-                e.target.style.display = "none";
-
-                await loadOrders(userId, { background: true });
-                applyFilterFor(filterDropdown, no_order_container);
-            } else {
-                alert("Failed to update order status. Please try again.");
             }
+            cancelBtn.style.display = "none";
+
+            const no_order_container = document.getElementById("No_orders_container");
+            const activeFilter =
+                document.querySelector(".filter-tab.active")?.dataset.filter || "all";
+
+            await loadOrders(userId, { background: true });
+            if (no_order_container) applyFilterFor(activeFilter, no_order_container);
+        } else {
+            alert("Failed to update order status. Please try again.");
         }
+        return;
+    }
 
-        if (e.target.classList.contains("TrackOrderBtn")) {
-            const trackBtn = e.target;
-            const card = e.target.closest(".order-card");
+    // ---- Track driver ----
+    const trackBtn = e.target.closest(".TrackOrderBtn");
+    if (trackBtn) {
+        const card = trackBtn.closest(".order-card");
+        if (!card) return;
 
-            const orderId = card
-                .querySelector(".order-header")
-                .querySelector(".order-id")
-                .textContent
-                .replace("#", "")
-                .trim();
+        const orderIdEl = card.querySelector(".order-header .order-id") || card.querySelector(".order-id");
+        if (!orderIdEl) return;
+        console.log("After rturn");
+        
+        const orderId = orderIdEl.textContent.replace("#", "").trim();
 
-            const warehouseCoords = {
-                lat: trackBtn.dataset.warehouse_lat,
-                lng: trackBtn.dataset.warehouse_lng
-            };
-            const driverCoords = {
-                lat: trackBtn.dataset.driver_lat,
-                lng: trackBtn.dataset.driver_lng
-            };
-            console.log("in initorders beginTracking")
-            await beginTracking(orderId, warehouseCoords, driverCoords);
-        }
-    });
-}
+        const warehouseCoords = {
+            lat: trackBtn.dataset.warehouse_lat,
+            lng: trackBtn.dataset.warehouse_lng
+        };
+        const driverCoords = {
+            lat: trackBtn.dataset.driver_lat,
+            lng: trackBtn.dataset.driver_lng
+        };
+
+        await beginTracking(orderId, warehouseCoords, driverCoords, {
+            driverName: trackBtn.dataset.driver_name,
+            driverPhone: trackBtn.dataset.driver_phone,
+            vehicleNo: trackBtn.dataset.vehicle_no
+        });
+        return;
+    }
+
+    // ---- Trip details toggle (inside the tracking sheet) ----
+    const tripDetailsBtn = e.target.closest("#tripDetailsBtn");
+    if (tripDetailsBtn) {
+        const panel = document.getElementById("tripDetailsPanel");
+        if (!panel) return;
+
+        const isShowing = panel.classList.toggle("show");
+        tripDetailsBtn.classList.toggle("active", isShowing);
+        tripDetailsBtn.textContent = isShowing ? "Hide Details" : "Trip Details";
+        return;
+    }
+
+    // ---- Call Driver (inside the tracking sheet) ----
+    const callDriver = e.target.closest("#callDriverBtn");
+    if (callDriver) {
+        const panel = document.getElementById("tripDetailsPanel");
+        if (!panel) return;
+
+        const isShowing = panel.classList.toggle("show");
+        tripDetailsBtn.classList.toggle("active", isShowing);
+        tripDetailsBtn.textContent = isShowing ? "Hide Details" : "Trip Details";
+        return;
+    }
+
+    // ---- Back button (close tracking map) ----
+    const backBtnEl = e.target.closest("#backBtn");
+    if (backBtnEl) {
+        const mapBlock = document.getElementById("map-block");
+        if (mapBlock) mapBlock.classList.remove("active");
+        resetTrackingSheet();
+        return;
+    }
+});
 
 // ============================================================
 // INITIAL LOAD
@@ -710,17 +974,5 @@ document.addEventListener("spa:pageload", (e) => {
         initOrdersPage();
     }
 });
-
-// ============================================================
-// BACK BUTTON
-// ============================================================
-
-const backBtn = document.getElementById("backBtn");
-
-if (backBtn) {
-    backBtn.addEventListener("click", () => {
-        document.getElementById("map-block").classList.remove("active");
-    });
-}
 
 // document.getElementById("searchInput").style.display="none"

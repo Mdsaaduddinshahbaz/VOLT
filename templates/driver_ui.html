@@ -1723,9 +1723,9 @@
                     </div>
                 </div>
                 <div class="field">
-                    <label for="driveremailInput">Email</label>
+                    <label for="drivernumberInput">Email</label>
                     <div class="phone-input-wrap">
-                        <input id="driveremailInput" type="email" placeholder="you@example.com" autocomplete="username"
+                        <input id="drivernumberInput" type="email" placeholder="you@example.com" autocomplete="username"
                             style="width:100%;">
                     </div>
                 </div>
@@ -1753,9 +1753,9 @@
                 <div class="auth-title">Let's get you<br>on the road.</div>
                 <div class="auth-sub">Enter your registered mobile number to sign in to your rider account.</div>
                 <div class="field">
-                    <label for="driverEmailInput">Email</label>
+                    <label for="driverNumberInput">Email</label>
                     <div class="phone-input-wrap">
-                        <input id="driverEmailInput" type="email" placeholder="you@example.com" autocomplete="username"
+                        <input id="driverNumberInput" type="email" placeholder="you@example.com" autocomplete="username"
                             style="width:100%;">
                     </div>
                 </div>
@@ -2224,6 +2224,7 @@
                     };
                     state.online = true;
                     saveSession();
+                    startLocationTracking(o.order_id)
                 } else {
                     // Server says there is no active order
                     state.activeOrder = null;
@@ -2352,10 +2353,10 @@
         async function driverLogin() {
             console.log("clicked");
 
-            const email = document.getElementById('driverEmailInput').value.trim();
+            const number = document.getElementById('driverNumberInput').value.trim();
             const password = document.getElementById('driverPasswordInput').value;
 
-            if (!email || !password) {
+            if (!number || !password) {
                 showToast('Enter your email and password');
                 return;
             }
@@ -2365,7 +2366,7 @@
                 const res = await fetch('/validate_driver', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password })
+                    body: JSON.stringify({ number, password })
                 });
                 const data = await res.json();
 
@@ -2390,11 +2391,11 @@
             }
         }
         async function signUp() {
-            const email = document.getElementById('driveremailInput').value.trim();
+            const number = document.getElementById('drivernumberInput').value.trim();
             const password = document.getElementById('driverpasswordInput').value;
             const username = document.getElementById("driverusernameInput").value.trim();
-            if (!email || !password || !username) {
-                showToast('Enter your email, username and password');
+            if (!number || !password || !username) {
+                showToast('Enter your number, username and password');
                 return;
             }
 
@@ -2402,7 +2403,7 @@
                 const res = await fetch('/signup_driver', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, username, password })
+                    body: JSON.stringify({ number, username, password })
                 });
                 const data = await res.json();
 
@@ -2830,6 +2831,12 @@
                 }
                 setMapExpanded(false);
                 document.getElementById('deliveryOtpOverlay').classList.add('show');
+                socket.emit("driver_location", {
+                            order_id: state.activeOrder.order_id,
+                            lat: c.warehouse_lat,
+                            lng: c.warehouse_lng,
+                            msg:"Driver has reached the location"
+                        });
                 setTimeout(() => document.querySelector('#deliveryOtpOverlay .otp-box').focus(), 150);
                 return;
             }
@@ -2844,8 +2851,16 @@
             if (state.odStep === 0) destination = [c.warehouse_lat, c.warehouse_lng];
             if (state.odStep === 2) destination = [c.customer_lat, c.customer_lng];
             // openNavigation()
-            if (state.odStep === 0 || state.odStep === 2)
+            // if (state.odStep === 0 || state.odStep === 2)
                 // openNavigation(destination[0],destination[1])
+            if(state.odStep === 1)
+                socket.emit("driver_location", {
+                        order_id: state.activeOrder.order_id,
+                        lat: c.warehouse_lat,
+                        lng: c.warehouse_lng,
+                        msg:"picked up"
+                    });
+            
             state.odStep++;
             saveSession();
             renderHomeStatus();

@@ -164,6 +164,7 @@ def auth_driver(f):
             g.type = "driver"
             g.driver_id = payload["driver_id"]
             g.username = payload.get("username")
+            g.number=payload.get("number")
             #print("after assignment")
         except jwt.InvalidTokenError:
             #print("invalid_token",request.endpoint)
@@ -922,12 +923,13 @@ def getOrders(userid):
     if g.type != "user":
         return jsonify({"success": False, "message": "Unauthorized"}), 403
     try:
+        print("in get orders")
         userid=g.user_id
         orders=get_orders(userid)
-        #print("oorders in server",orders)
+        print("oorders in server",orders)
         return({"success":True,"orders":orders})
     except Exception as e:
-        #print(e)
+        print(e)
         return({"success":False})
 @app.route("/seller/orders",methods=["POST","GET"])
 @login_required
@@ -972,6 +974,7 @@ def renderSellerOrders(res_name,res_id):
 def accept_order_server():
     start=time.perf_counter()
     driver_id = g.driver_id
+    driver_number=g.number
     data = request.get_json(silent=True) or {}
     order_id = data.get("order_id")
     driver_coords=data.get("driver_coords")
@@ -986,13 +989,13 @@ def accept_order_server():
         socketio.emit("order_taken", {"order_id": order_id}, room=f"driver_{driver_id}")
         return jsonify({"success": False, "message": "Order already taken"}), 409
 
-    result = accept_delivery_order(order_id, driver_id, redis_data)
+    result = accept_delivery_order(order_id, driver_id, driver_number,redis_data)
     if not result["success"]:
         print(result)
         delete_lock(order_id)
         return jsonify({"success": False, "message": result["message"]}), 400
-    socketio.emit("driver_assigned", {"order_id": order_id,"warehouse_coords":result["order"]["warehouse_coords"],"driver_coords":driver_coords}, room="warehouse")
-    socketio.emit("driver_assigned", {"order_id": order_id,"warehouse_coords":result["order"]["warehouse_coords"],"driver_coords":driver_coords}, room=order_id)
+    socketio.emit("driver_assigned", {"order_id": order_id,"warehouse_coords":result["order"]["warehouse_coords"],"driver_coords":driver_coords,"driver_number":driver_number}, room="warehouse")
+    socketio.emit("driver_assigned", {"order_id": order_id,"warehouse_coords":result["order"]["warehouse_coords"],"driver_coords":driver_coords,"driver_number":driver_number}, room=order_id)
     #print("accept_order_server",time.perf_counter()-start)
     return jsonify({"success": True, "order": result["order"]})
 @app.route("/driver/active_order",methods=["POST","GET"])
@@ -1166,17 +1169,19 @@ import re
 EMAIL_REGEX = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
 @app.post("/validate_driver")
 def validate_driver():
-    credentials, error = validate_credentials(request.get_json(silent=True))
-    if error:
-        return error
-
-    res = check_existing_driver(credentials["email"], credentials["password"])
-
+    # credentials, error = validate_credentials(request.get_json(silent=True))
+    # if error:
+    #     return error
+    data=request.get_json(silent=True)
+    print(data)
+    res = check_existing_driver(data["number"], data["password"])
+    print(res)
     if res.get("success") is True:
         token = jwt.encode(
             {
                 "type": "driver",
                 "driver_id": res["userid"],
+                "number":res["number"],
                 "username": res["username"],
                 "exp": datetime.utcnow() + timedelta(days=30)
             },
@@ -1212,20 +1217,22 @@ def signup_driver():
     if not data:
         return jsonify({"success": False, "message": "Request body is required"}), 400
 
-    email = data.get("email", "").strip().lower()
+    number = data.get("number", "").strip().lower()
     username = data.get("username", "").strip()
     password = data.get("password", "")
 
-    if not email or not EMAIL_REGEX.match(email):
-        return jsonify({"success": False, "message": "Valid email is required"}), 400
+    # if not email or not EMAIL_REGEX.match(email):
+    #     return jsonify({"success": False, "message": "Valid email is required"}), 400
     if not username or len(username) < 3:
         return jsonify({"success": False, "message": "Username is required"}), 400
     if not password or len(password) < 8:
         return jsonify({"success": False, "message": "Password must be at least 8 characters"}), 400
 
-    res = create_new_driver(email, username, password)
+    res = create_new_driver(number, username, password)
+    print(res)
     token=jwt.encode({
         "username":username,
+        "number":number,
         "driver_id":res["id"],
         "type":"driver"
     },app.config["SECRET_KEY"],

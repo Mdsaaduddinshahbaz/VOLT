@@ -442,6 +442,7 @@ def get_orders(userid):
                 "items": order["items"],
                 "status": order["status"],
                 "date": order["time"],
+                # "driver_phone":order["driver_number"],
                 "delivery_status": order["delivery_status"]
             }
     
@@ -1265,13 +1266,13 @@ def save_category(res_id, category, subcats):
 
 # def driver_details():
 #     drivers
-def create_new_driver(email,username, password,role="driver"):
+def create_new_driver(number,username, password,role="driver"):
     try:
         ##print("in create user")
             # owner=owners.find_one({"email":email})
             # if owner is None:
         result =drivers.insert_one({
-                "email": email,
+                "number": number,
                 "username":username,
                 "password": password,
                 "role":role,
@@ -1287,15 +1288,15 @@ def create_new_driver(email,username, password,role="driver"):
         return ({"success":True,"id":str(result.inserted_id)})
     except Exception as e:
         print("error",str(e))
-def check_existing_driver(email,password):
+def check_existing_driver(number,password):
     ##print("in existing driver")
-    driver=drivers.find_one({"email":email})
-    ##print(driver)
+    driver=drivers.find_one({"number":number})
+    print(driver)
     if(driver): 
         ##print("in existing user if block",password)
         if verify_password(password, driver["password"]):
             ##print("in existing user if if block")
-            return ({"success":True,"userid":str(driver["_id"]),"username":driver["username"],"is_verified":driver["is_verified"]})
+            return ({"success":True,"userid":str(driver["_id"]),"username":driver["username"],"is_verified":driver["is_verified"],"number":driver["number"]})
         else:
             return {"success":False}
     else: return {"success":404}
@@ -1310,10 +1311,10 @@ driver_documents = db["driver_documents"]
 
 drivers.create_index("email", unique=True)   # you have this on users/owners but not drivers yet
 
-def create_new_driver(email, username, password, role="driver"):
+def create_new_driver(number, username, password, role="driver"):
     try:
         result = drivers.insert_one({
-            "email": email,
+            "number": number,
             "username": username,
             "password": (password),
             "role": role,
@@ -1337,14 +1338,15 @@ def create_new_driver(email, username, password, role="driver"):
         return {"success": False, "message": str(e)}
 
 
-def check_existing_driver(email, password):
-    driver = drivers.find_one({"email": email})
+def check_existing_driver(number, password):
+    driver = drivers.find_one({"number": number})
     if driver:
         if driver["password"] == password:
             return {
                 "success": True,
                 "userid": str(driver["_id"]),
                 "username": driver["username"],
+                "number":driver["number"],
                 "is_verified": driver["is_verified"]
             }
         else:
@@ -1474,7 +1476,7 @@ def get_available_order_for_driver(driver_id):
     }
 
 
-def accept_delivery_order(order_id, driver_id, redis_data):
+def accept_delivery_order(order_id, driver_id,driver_number, redis_data):
     with client.start_session() as session:
         with session.start_transaction():
             amount = redis_data["amount"]
@@ -1484,6 +1486,7 @@ def accept_delivery_order(order_id, driver_id, redis_data):
                     "delivery_status": "accepted",
                     "driver_id": driver_id,
                     "amount": amount,
+                    "driver_number":driver_number,
                     "customer_name": redis_data.get("customer_name"),
                     "warehouse_lat": redis_data.get("warehouse_lat"),
                     "warehouse_lng": redis_data.get("warehouse_lng"),
